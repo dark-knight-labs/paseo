@@ -4033,7 +4033,6 @@ export class DaemonClient {
     );
   }
 
-
   async listBackgroundTasks(
     parentAgentId: string,
     options: { requestId?: string; timeout?: number } = {},
