@@ -51,6 +51,7 @@ import {
 } from "@/runtime/host-runtime";
 import { ProvidersSection } from "@/screens/settings/providers-section";
 import { HostUsageSection } from "@/usage";
+import { CliproxyapiUsageSection } from "@/gateway-quota/usage-section";
 import { HostAppearanceSection } from "@/screens/settings/host-appearance-section";
 import { SettingsSection } from "@/components/settings/headings/settings-section";
 import { useSessionStore } from "@/stores/session-store";
@@ -68,7 +69,6 @@ import { BrowserToolsOptInCard } from "./browser-tools-card";
 import { RestartRecoveryCard } from "./restart-recovery-card";
 import { IdleRuntimeCleanupCard } from "./idle-runtime-cleanup-card";
 import { restartDaemonFromSettings, updateDaemonFromSettings } from "./daemon-lifecycle";
-import { MetadataCustomEndpointCard } from "./metadata-custom-endpoint-card";
 
 const ThemedRestart = withUnistyles(RotateCw);
 const ThemedUpdate = withUnistyles(ArrowUpToLine);
@@ -305,7 +305,6 @@ export function HostAgentsPage({ serverId }: { serverId: string }) {
         <SettingsSection title={t("settings.hostSections.agents")}>
           <InjectPaseoToolsCard serverId={serverId} />
           <BrowserToolsOptInCard serverId={serverId} />
-          <MetadataCustomEndpointCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
           <RestartRecoveryCard serverId={serverId} />
           <IdleRuntimeCleanupCard serverId={serverId} />
@@ -370,6 +369,7 @@ export function HostUsagePage({ serverId }: { serverId: string }) {
   return (
     <View>
       <HostUsageSection serverId={serverId} />
+      <CliproxyapiUsageSection serverId={serverId} />
     </View>
   );
 }
