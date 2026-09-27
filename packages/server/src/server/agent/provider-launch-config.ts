@@ -247,9 +247,17 @@ export function createProviderEnvSpec(options: ProviderEnvOptions = {}): Provide
   };
 }
 
-export function createProviderEnv(options: ProviderEnvOptions = {}): ExternalProcessEnv {
-  const spec = createProviderEnvSpec(options);
+/**
+ * Build the child env from a spec. Callers that adjust the spec (Gateway
+ * routing, for one) must derive the env through this, so both spawn paths
+ * cannot disagree about what the child receives.
+ */
+export function createProviderEnvFromSpec(spec: ProviderEnvSpec): ExternalProcessEnv {
   return createExternalProcessEnv(spec.baseEnv ?? process.env, spec.envOverlay);
+}
+
+export function createProviderEnv(options: ProviderEnvOptions = {}): ExternalProcessEnv {
+  return createProviderEnvFromSpec(createProviderEnvSpec(options));
 }
 
 export async function isProviderCommandAvailable(
