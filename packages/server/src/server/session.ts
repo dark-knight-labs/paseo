@@ -188,6 +188,7 @@ import {
 } from "./session/checkout/git-metadata-generator.js";
 import { ScheduleSession } from "./session/schedule/schedule-session.js";
 import { ProviderCatalogSession } from "./session/provider/provider-catalog-session.js";
+import { resetCodexQuota } from "./session/usage/codex-quota-reset.js";
 import { UsageSession } from "./session/usage/usage-session.js";
 import {
   SpeechModelsSession,
@@ -1157,6 +1158,8 @@ export class Session {
       isEnabled: () => daemonConfigStore.get().usage?.enabled !== false,
       emit: (msg) => this.emit(msg),
       runtime: pluginRuntime,
+      resetProviderQuota: (providerId) =>
+        resetCodexQuota({ logger: this.sessionLogger }, providerId),
       logger: this.sessionLogger,
     });
     this.speechModelsSession = new SpeechModelsSession({
@@ -3667,7 +3670,7 @@ export class Session {
       case "usage.list_reports.request":
         return this.usageSession.handleListReports(msg);
       case "provider.usage.reset_quota.request":
-        return this.providerCatalogSession.handleProviderUsageResetQuotaRequest(msg);
+        return this.usageSession.handleResetQuotaRequest(msg);
       case "cliproxyapi.quota.get.request":
         return this.providerCatalogSession.handleGatewayQuotaGetRequest(msg);
       case "cliproxyapi.stats.get.request":
