@@ -4658,6 +4658,8 @@ export class DaemonClient {
       source: WorkspaceCreateRequest["source"];
       title?: string;
       firstAgentContext?: WorkspaceCreateRequest["firstAgentContext"];
+      linkedRepoRoots?: WorkspaceCreateRequest["linkedRepoRoots"];
+      secondaryWorktrees?: WorkspaceCreateRequest["secondaryWorktrees"];
     },
     requestId?: string,
   ): Promise<WorkspaceCreatePayload> {
@@ -4669,6 +4671,10 @@ export class DaemonClient {
         ...(input.title !== undefined ? { title: input.title } : {}),
         ...(input.firstAgentContext !== undefined
           ? { firstAgentContext: input.firstAgentContext }
+          : {}),
+        ...(input.linkedRepoRoots !== undefined ? { linkedRepoRoots: input.linkedRepoRoots } : {}),
+        ...(input.secondaryWorktrees !== undefined
+          ? { secondaryWorktrees: input.secondaryWorktrees }
           : {}),
       },
       responseType: "workspace.create.response",

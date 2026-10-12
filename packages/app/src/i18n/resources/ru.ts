@@ -1301,6 +1301,15 @@ export const ru: TranslationResources = {
       searchPlaceholder: "Поиск веток и PR",
       title: "Начать с",
     },
+    additionalRepos: {
+      addAnother: "Add another",
+      title: "Additional repositories",
+      projectTitle: "Additional repository",
+      remove: "Remove {{name}}",
+      projectPlaceholder: "Choose repository",
+      basePlaceholder: "Choose starting ref",
+      noEligibleProjects: "No other worktree-capable projects on this host.",
+    },
     launch: {
       title: "Что запустить",
       chat: "Чат",
@@ -1523,6 +1532,14 @@ export const ru: TranslationResources = {
       open_failed: "Не удалось открыть проект.",
     },
     openPath: "Открыть путь",
+  },
+  checkoutSwitcher: {
+    triggerTooltip: "Switch repository",
+    currentCheckout: "Current repository: {{name}}. Press to switch repository.",
+    placeholder: "Switch repository...",
+    searchPlaceholder: "Filter repositories...",
+    empty: "No repositories found.",
+    title: "Switch repository",
   },
   branchSwitcher: {
     triggerTooltip: "Переключить ветку рабочего пространства",

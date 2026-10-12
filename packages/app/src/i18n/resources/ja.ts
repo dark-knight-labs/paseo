@@ -1298,6 +1298,15 @@ export const ja: TranslationResources = {
       searchPlaceholder: "ブランチとPRを検索",
       title: "開始点",
     },
+    additionalRepos: {
+      addAnother: "Add another",
+      title: "Additional repositories",
+      projectTitle: "Additional repository",
+      remove: "Remove {{name}}",
+      projectPlaceholder: "Choose repository",
+      basePlaceholder: "Choose starting ref",
+      noEligibleProjects: "No other worktree-capable projects on this host.",
+    },
     launch: {
       title: "What to launch",
       chat: "Chat",
@@ -1513,6 +1522,14 @@ export const ja: TranslationResources = {
       open_failed: "プロジェクトを開けませんでした。",
     },
     openPath: "パスを開く",
+  },
+  checkoutSwitcher: {
+    triggerTooltip: "Switch repository",
+    currentCheckout: "Current repository: {{name}}. Press to switch repository.",
+    placeholder: "Switch repository...",
+    searchPlaceholder: "Filter repositories...",
+    empty: "No repositories found.",
+    title: "Switch repository",
   },
   branchSwitcher: {
     triggerTooltip: "ワークスペースのブランチを切り替え",

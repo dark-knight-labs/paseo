@@ -430,3 +430,50 @@ archive_workspace_request resolves once archivedAt is durable and runs paseo.jso
 ```bash
 npx vitest run --config packages/server/vitest.config.ts packages/server/src/server/workspace-archive-service.test.ts packages/server/src/server/session.workspaces.test.ts packages/server/src/utils/worktree.posix.test.ts --bail=1
 ```
+
+## multi-repo-context-roots
+
+**workspaces can declare linked multi-repo context roots**
+
+workspace.create.request accepts optional linkedRepoRoots; the daemon normalizes them (trim, drop blanks, drop the workspace cwd, dedupe, cap at 10), rejects missing directories with linked_repo_not_found, persists them on the workspace record, and echoes them on the workspace descriptor. Old records and old clients parse unchanged (absent means none). This is the first slice of discussion #3254: workspace as context, not just one checkout. Execution, git status, and review aggregation across linked roots are follow-ups, not this commit.
+
+```bash
+npx vitest run packages/server/src/server/workspace-linked-repos.test.ts --bail=1
+npx vitest run packages/server/src/server/session.workspaces.test.ts --bail=1 -t "linked repo"
+```
+
+## multi-repo-worktree-checkouts
+
+**worktree workspaces can check out additional repositories side by side**
+
+workspace.create.request accepts optional secondaryWorktrees (per-repo cwd/projectId plus base ref); the daemon cuts one independent worktree per repo, stages every checkout inside a `<slug>--multi` container that becomes the workspace cwd, persists secondaryCheckouts on the record, echoes them on the descriptor, rolls back all created worktrees on partial failure, and removes every checkout plus the container (iff empty) on archive. The creation screen shows "Add another" below the project line for worktree isolation, offering only git-driven same-host projects not already selected, each with its own starting-ref picker. All wire fields are COMPAT-optional; absent means single-repo and old clients/daemons interoperate unchanged.
+
+```bash
+npx vitest run packages/server/src/server/paseo-worktree-service.test.ts --bail=1
+npx vitest run packages/server/src/server/session.workspaces.test.ts --bail=1 -t "secondary"
+npx vitest run packages/server/src/server/workspace-archive-service.test.ts --bail=1
+npx vitest run packages/protocol/src/messages.workspaces.test.ts --bail=1
+npm test --workspace=@getpaseo/app -- src/screens/new-workspace/additional-repos.test.ts src/i18n/resources.test.ts --bail=1
+```
+
+## multi-repo-checkout-switchers
+
+**multi-repo workspaces get a repo switcher in Changes and the navbar, with live per-checkout status**
+
+the git observer registers each secondary checkout path under the workspace id (primary container cwd stays non-git and unwatched); the descriptor echoes the relocated main checkout as COMPAT-optional worktreeRoot; the app passes secondaryCheckouts through the store, lists main-first checkout options, shows a repo switcher above the branch switcher in Changes (re-targeting every query at the selected checkout) and before Run services in the navbar (scoping Copy path to the selected checkout). Single-repo surfaces mount no switcher and behave verbatim.
+
+```bash
+npx vitest run packages/server/src/server/session/workspace-git-observer/workspace-git-observer-service.test.ts --bail=1
+npx vitest run packages/protocol/src/messages.workspaces.test.ts --bail=1
+npm test --workspace=@getpaseo/app -- src/workspace/multi-repo-checkouts.test.ts src/i18n/resources.test.ts --bail=1
+```
+
+## multi-repo-cli-link-repo
+
+**`workspace create` accepts repeatable --link-repo/--link-base for secondaries**
+
+repeatable --link-repo takes a local path (checked out by directory) or project:<id> for a registered project; repeatable --link-base pairs positionally onto refName. Blank entries, bases without repos, and count mismatches fail in the CLI before any worktree is cut; --link-repo with local isolation hits the existing worktree-options error. Branch names and slugs stay daemon-generated. DaemonClient already forwarded secondaryWorktrees.
+
+```bash
+npx vitest run packages/cli/src/commands/workspace/create.test.ts --bail=1
+```

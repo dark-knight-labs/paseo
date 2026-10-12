@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { connectToDaemon, getDaemonHost } from "../../utils/client.js";
 import type { CommandError, CommandOptions, SingleResult } from "../../output/index.js";
+import type { WorkspaceSecondaryWorktreeInput } from "@getpaseo/protocol/messages";
 import { toWorkspaceRow, workspaceSchema, type WorkspaceRow } from "./shared.js";
 
 export interface WorkspaceCreateOptions extends CommandOptions {
@@ -15,6 +16,8 @@ export interface WorkspaceCreateOptions extends CommandOptions {
   branch?: string;
   prNumber?: string;
   forge?: string;
+  linkRepo?: string[];
+  linkBase?: string[];
 }
 
 interface WorktreeSourceBase {
@@ -30,6 +33,52 @@ function assertOptionsAbsent(values: unknown[], message: string): void {
   }
 }
 
+/**
+ * Fork multi-repo (#3254): builds one secondary worktree input per --link-repo.
+ * Entries are local paths (checked out by directory) or `project:<id>` for a
+ * registered project. --link-base pairs positionally; a count mismatch is a
+ * CLI error so the user finds out before any worktree is cut.
+ */
+export function buildSecondaryWorktreeInputs(
+  options: Pick<WorkspaceCreateOptions, "linkRepo" | "linkBase">,
+): WorkspaceSecondaryWorktreeInput[] | undefined {
+  const repos = options.linkRepo ?? [];
+  const bases = options.linkBase ?? [];
+  if (repos.length === 0) {
+    if (bases.length > 0) {
+      throw new Error("--link-base requires --link-repo");
+    }
+    return undefined;
+  }
+  if (bases.length > 0 && bases.length !== repos.length) {
+    throw new Error(
+      `--link-base count (${bases.length}) must match --link-repo count (${repos.length})`,
+    );
+  }
+  const inputs: WorkspaceSecondaryWorktreeInput[] = [];
+  for (const [index, repo] of repos.entries()) {
+    const trimmed = repo.trim();
+    if (!trimmed) {
+      throw new Error("--link-repo must not be blank");
+    }
+    const projectMatch = /^project:(.+)$/.exec(trimmed);
+    const base = bases[index]?.trim();
+    if (base !== undefined && base.length === 0) {
+      throw new Error("--link-base must not be blank");
+    }
+    const projectId = projectMatch?.[1]?.trim();
+    if (projectMatch && !projectId) {
+      throw new Error("--link-repo project id must not be blank");
+    }
+    const input: WorkspaceSecondaryWorktreeInput = projectId ? { projectId } : { cwd: trimmed };
+    if (base) {
+      input.refName = base;
+    }
+    inputs.push(input);
+  }
+  return inputs;
+}
+
 function buildLocalWorkspaceSource(options: WorkspaceCreateOptions, path: string) {
   assertOptionsAbsent(
     [
@@ -40,6 +89,8 @@ function buildLocalWorkspaceSource(options: WorkspaceCreateOptions, path: string
       options.branch,
       options.prNumber,
       options.forge,
+      ...(options.linkRepo ?? []),
+      ...(options.linkBase ?? []),
     ],
     "Worktree options require --isolation worktree",
   );
@@ -144,9 +195,11 @@ export async function runCreateCommand(
   });
 
   try {
+    const secondaryWorktrees = buildSecondaryWorktreeInputs(options);
     const payload = await client.createWorkspace({
       source: buildWorkspaceSource(options),
       ...(options.title ? { title: options.title } : {}),
+      ...(secondaryWorktrees ? { secondaryWorktrees } : {}),
     });
     if (!payload.workspace) {
       throw new Error(payload.error ?? "Workspace creation failed");

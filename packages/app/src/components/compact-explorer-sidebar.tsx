@@ -23,6 +23,8 @@ import {
 } from "@/constants/layout";
 import { ChangesSurface } from "@/git/diff-pane";
 import { changesStateSchema, defaultChangesState, type ChangesState } from "@/panels/changes/state";
+import { useWorkspace } from "@/stores/session-store-hooks";
+import { listWorkspaceCheckouts } from "@/workspace/multi-repo-checkouts";
 import { FileExplorerPane } from "./file-explorer-pane";
 import { WorkspaceTodoPane } from "@/todos/workspace-todo-pane";
 import { ExplorerPortsPane } from "./explorer-ports-pane";
@@ -491,6 +493,11 @@ function ChangedFilesPane({
   "serverId" | "workspaceId" | "workspaceRoot" | "isOpen" | "onOpenFile"
 >) {
   const { addFile, canAddToChat } = useAddFileToChat({ serverId, workspaceId });
+  const workspace = useWorkspace(serverId, workspaceId ?? null);
+  const checkouts = useMemo(
+    () => (workspace ? listWorkspaceCheckouts(workspace) : undefined),
+    [workspace],
+  );
   const [changesState, setChangesState] = useState<ChangesState>(() =>
     changesStateSchema.parse(defaultChangesState),
   );
@@ -499,6 +506,7 @@ function ChangedFilesPane({
       serverId={serverId}
       workspaceId={workspaceId}
       cwd={workspaceRoot}
+      checkouts={checkouts}
       enabled={isOpen}
       modeScope="compact-explorer"
       onOpenFile={onOpenFile}

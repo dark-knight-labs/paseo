@@ -18,7 +18,7 @@ import type {
   WorkspaceArchiveContext,
   WorkspaceRegistry,
 } from "./workspace-registry.js";
-import { createRealpathAwarePathMatcher } from "../utils/path.js";
+import { createRealpathAwarePathMatcher, getRealpathAwareRelativePath } from "../utils/path.js";
 import { runWithGitCommandPriority } from "../utils/run-git-command.js";
 
 export type ActiveWorkspaceRef = Pick<
@@ -113,6 +113,14 @@ interface BackingDirectory {
   isPaseoOwnedWorktree: boolean;
   mainRepoRoot: string | null;
   paseoWorktreesRoot: string | null;
+  // Fork multi-repo (#3254): extra Paseo-owned worktree checkouts staged inside
+  // the same container cwd. Removed alongside the main backing directory; each
+  // carries its main repo root so `git worktree remove` runs from the owning
+  // repo (container checkouts do not resolve to the ownership path shape).
+  secondaryWorktrees: { worktreePath: string; repoRoot: string | null }[];
+  // The container dir holding every checkout. Removed after the worktrees it
+  // contains, iff it is empty (never force-removed: foreign files must survive).
+  containerPath: string | null;
 }
 
 interface ArchiveTarget {
@@ -285,8 +293,36 @@ async function resolveArchiveTarget(
       return { backing: null, teardownTargets: [], setupWorkspaceIds: [], workspaceIds: [] };
     }
     const isArchived = "archivedAt" in record && Boolean(record.archivedAt);
+    const backing = await resolveWorkspaceBackingDirectory(record, dependencies);
+    const secondaryWorktrees =
+      "secondaryCheckouts" in record && Array.isArray(record.secondaryCheckouts)
+        ? record.secondaryCheckouts
+            .map((checkout) =>
+              checkout && typeof checkout.worktreePath === "string"
+                ? {
+                    worktreePath: checkout.worktreePath,
+                    repoRoot: typeof checkout.repoRoot === "string" ? checkout.repoRoot : null,
+                  }
+                : null,
+            )
+            .filter(
+              (candidate): candidate is { worktreePath: string; repoRoot: string | null } =>
+                candidate !== null,
+            )
+        : [];
+    // The container is the workspace cwd when it parents the main checkout;
+    // otherwise the workspace is single-repo and there is nothing extra.
+    const containerPath =
+      secondaryWorktrees.length > 0 &&
+      backing.isPaseoOwnedWorktree &&
+      isContainerParentOf(record.cwd, [
+        backing.path,
+        ...secondaryWorktrees.map((secondary) => secondary.worktreePath),
+      ])
+        ? resolve(record.cwd)
+        : null;
     return {
-      backing: await resolveWorkspaceBackingDirectory(record, dependencies),
+      backing: { ...backing, secondaryWorktrees, containerPath },
       teardownTargets: isArchived ? [] : [{ workspaceId, cwd: record.cwd }],
       setupWorkspaceIds: [workspaceId],
       workspaceIds: isArchived ? [] : [workspaceId],
@@ -344,6 +380,29 @@ async function stopWorkspaceSetups(
   }
 }
 
+/**
+ * True when `candidate` is a strict parent of every checkout path (i.e. the
+ * multi-repo container), never when it IS one of the checkouts. Guards the
+ * container removal: only a dir that parents known Paseo-owned checkouts is
+ * ever considered, and it is removed only while empty.
+ */
+function isContainerParentOf(candidate: string, checkoutPaths: string[]): boolean {
+  const normalizedCandidate = resolve(candidate);
+  if (checkoutPaths.length === 0 || normalizedCandidate.length === 0) {
+    return false;
+  }
+  for (const checkoutPath of checkoutPaths) {
+    // Strict parent: inside the candidate, but not the candidate itself.
+    // getRealpathAwareRelativePath returns "" for identity and null for
+    // outside, so both reject; anything else is a genuine child path.
+    const relative = getRealpathAwareRelativePath(normalizedCandidate, checkoutPath);
+    if (relative === null || relative === "") {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function resolveWorkspaceBackingDirectory(
   workspace: ActiveWorkspaceRef,
   dependencies: Pick<ArchiveDependencies, "paseoHome" | "paseoWorktreesBaseRoot">,
@@ -354,6 +413,8 @@ async function resolveWorkspaceBackingDirectory(
       isPaseoOwnedWorktree: true,
       mainRepoRoot: workspace.mainRepoRoot,
       paseoWorktreesRoot: null,
+      secondaryWorktrees: [],
+      containerPath: null,
     };
   }
   if (workspace.kind !== "worktree") {
@@ -362,6 +423,8 @@ async function resolveWorkspaceBackingDirectory(
       isPaseoOwnedWorktree: false,
       mainRepoRoot: workspace.mainRepoRoot ?? null,
       paseoWorktreesRoot: null,
+      secondaryWorktrees: [],
+      containerPath: null,
     };
   }
 
@@ -388,6 +451,8 @@ async function resolveBackingDirectory(
     isPaseoOwnedWorktree: ownership.allowed,
     mainRepoRoot: ownership.repoRoot ?? null,
     paseoWorktreesRoot: ownership.worktreeRoot ?? null,
+    secondaryWorktrees: [],
+    containerPath: null,
   };
 }
 
@@ -446,10 +511,21 @@ async function maybeRemoveDirectory(
       .map((teardownTarget) => teardownTarget.cwd),
   );
 
+  // Multi-repo (#3254): every checkout runs its own repo's teardown commands
+  // (teardownCwd selects the paseo.json; worktreePath scopes the sandbox) and
+  // is removed as its own worktree. The main checkout keeps today's behavior.
+  const checkoutPaths = [
+    backing.path,
+    ...backing.secondaryWorktrees.map((secondary) => secondary.worktreePath),
+  ];
   try {
     for (const teardownCwd of teardownCwds) {
+      const owningCheckout =
+        checkoutPaths.find(
+          (checkoutPath) => getRealpathAwareRelativePath(checkoutPath, teardownCwd) !== null,
+        ) ?? backing.path;
       await runWorktreeTeardownCommands({
-        worktreePath: backing.path,
+        worktreePath: owningCheckout,
         teardownCwd,
         repoRootPath: backing.mainRepoRoot ?? undefined,
       });
@@ -466,27 +542,50 @@ async function maybeRemoveDirectory(
   }
 
   const remainingActive = await dependencies.listActiveWorkspaces();
-  if (
-    !(await isDirectoryUnreferenced(
-      remainingActive,
-      backing.path,
-      new Set(archivedWorkspaceIds),
-      dependencies,
-    ))
-  ) {
-    return false;
+  for (const checkoutPath of checkoutPaths) {
+    if (
+      !(await isDirectoryUnreferenced(
+        remainingActive,
+        checkoutPath,
+        new Set(archivedWorkspaceIds),
+        dependencies,
+      ))
+    ) {
+      return false;
+    }
   }
 
+  // Each checkout is removed via `git worktree remove` run from its owning
+  // repo: container checkouts live outside the <base>/<hash>/<slug> ownership
+  // path shape, so the path-derived worktreesRoot would misresolve to the
+  // container itself and `rm -rf` siblings. The main checkout keeps today's
+  // behavior (cwd = main repo root).
+  const removals: { worktreePath: string; cwd: string | null }[] = [
+    { worktreePath: backing.path, cwd: backing.mainRepoRoot },
+    ...backing.secondaryWorktrees.map((secondary) => ({
+      worktreePath: secondary.worktreePath,
+      cwd: secondary.repoRoot,
+    })),
+  ];
   try {
-    await deletePaseoWorktree({
-      cwd: backing.mainRepoRoot,
-      worktreePath: backing.path,
-      teardownCwds: [],
-      worktreesRoot: backing.paseoWorktreesRoot ?? undefined,
-      paseoHome: dependencies.paseoHome,
-      worktreesBaseRoot: dependencies.paseoWorktreesBaseRoot,
-    });
-    dependencies.github.invalidate({ cwd: backing.path });
+    for (const removal of removals) {
+      await deletePaseoWorktree({
+        cwd: removal.cwd,
+        worktreePath: removal.worktreePath,
+        teardownCwds: [],
+        worktreesRoot: backing.paseoWorktreesRoot ?? undefined,
+        paseoHome: dependencies.paseoHome,
+        worktreesBaseRoot: dependencies.paseoWorktreesBaseRoot,
+      });
+      dependencies.github.invalidate({ cwd: removal.worktreePath });
+    }
+    // The container only ever holds Paseo-owned checkouts staged at creation;
+    // remove it iff empty so foreign files (agent output at the root) survive.
+    if (backing.containerPath) {
+      await removeContainerIfEmpty(backing.containerPath);
+    }
+    // The main repo still lists removed worktrees until its snapshot refreshes.
+    await refreshMainRepoSnapshot(dependencies, target, request.requestId);
     return true;
   } catch (error) {
     dependencies.sessionLogger?.warn(
@@ -494,6 +593,14 @@ async function maybeRemoveDirectory(
       "Worktree disk removal failed during archive; workspace already archived",
     );
     return false;
+  }
+}
+
+async function removeContainerIfEmpty(containerPath: string): Promise<void> {
+  const { readdir, rmdir } = await import("node:fs/promises");
+  const entries = await readdir(containerPath);
+  if (entries.length === 0) {
+    await rmdir(containerPath);
   }
 }
 

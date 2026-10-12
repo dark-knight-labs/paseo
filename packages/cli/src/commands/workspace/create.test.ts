@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkspaceSource } from "./create.js";
+import { buildSecondaryWorktreeInputs, buildWorkspaceSource } from "./create.js";
 
 describe("workspace create source", () => {
   it("maps local isolation to a directory workspace", () => {
@@ -121,5 +121,48 @@ describe("workspace create source", () => {
     expect(() => buildWorkspaceSource({ isolation: "container" })).toThrow(
       "Unsupported workspace isolation",
     );
+  });
+});
+
+describe("workspace create link-repo", () => {
+  it("returns undefined when no link repos are given", () => {
+    expect(buildSecondaryWorktreeInputs({})).toBeUndefined();
+    expect(buildSecondaryWorktreeInputs({ linkRepo: [], linkBase: [] })).toBeUndefined();
+  });
+
+  it("maps paths to cwd inputs and pairs bases positionally", () => {
+    expect(
+      buildSecondaryWorktreeInputs({
+        linkRepo: ["/tmp/service-b", "/tmp/shared-lib"],
+        linkBase: ["main", "develop"],
+      }),
+    ).toEqual([
+      { cwd: "/tmp/service-b", refName: "main" },
+      { cwd: "/tmp/shared-lib", refName: "develop" },
+    ]);
+  });
+
+  it("maps project: ids to projectId inputs without a base", () => {
+    expect(buildSecondaryWorktreeInputs({ linkRepo: ["project:proj-b"] })).toEqual([
+      { projectId: "proj-b" },
+    ]);
+  });
+
+  it("rejects blank entries and mismatched base counts", () => {
+    expect(() => buildSecondaryWorktreeInputs({ linkRepo: ["  "] })).toThrow(
+      "--link-repo must not be blank",
+    );
+    expect(() => buildSecondaryWorktreeInputs({ linkBase: ["main"] })).toThrow(
+      "--link-base requires --link-repo",
+    );
+    expect(() =>
+      buildSecondaryWorktreeInputs({ linkRepo: ["/tmp/a", "/tmp/b"], linkBase: ["main"] }),
+    ).toThrow("must match --link-repo count");
+  });
+
+  it("rejects link repos for local isolation", () => {
+    expect(() =>
+      buildWorkspaceSource({ isolation: "local", linkRepo: ["/tmp/service-b"] }),
+    ).toThrow("Worktree options require --isolation worktree");
   });
 });

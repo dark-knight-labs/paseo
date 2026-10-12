@@ -131,6 +131,78 @@ test("refreshes a source project that became Git while creating a worktree", asy
   });
 });
 
+test("creates secondary worktrees with independent branches and persists checkouts", async () => {
+  const main = createGitRepo();
+  const secondary = createGitRepo();
+  cleanupPaths.push(main.tempDir, secondary.tempDir);
+  const deps = createDeps();
+  const paseoHome = path.join(main.tempDir, ".paseo");
+
+  const result = await createPaseoWorktree(
+    {
+      cwd: main.repoDir,
+      worktreeSlug: "multi-main",
+      runSetup: false,
+      paseoHome,
+      secondaries: [{ cwd: secondary.repoDir, refName: "main", branchName: "feature-b" }],
+    },
+    deps,
+  );
+
+  expect(result.secondaries).toHaveLength(1);
+  const created = result.secondaries[0]!;
+  expect(created.worktree.branchName).toBe("feature-b");
+  expect(created.worktree.branchName).not.toBe(result.worktree.branchName);
+  // The workspace cwd is the container holding every checkout side by side.
+  const containerPath = result.workspace.cwd;
+  expect(containerPath).not.toBe(result.worktree.worktreePath);
+  expect(path.basename(containerPath)).toBe("multi-main--multi");
+  expect(existsSync(path.join(containerPath, path.basename(result.worktree.worktreePath)))).toBe(
+    true,
+  );
+  expect(existsSync(path.join(containerPath, path.basename(created.worktree.worktreePath)))).toBe(
+    true,
+  );
+  // Both relocated checkouts stay functional git worktrees known to their repos.
+  expect(readWorktreeCurrentBranch(result.worktree.worktreePath)).toBe(result.worktree.branchName);
+  expect(readWorktreeCurrentBranch(created.worktree.worktreePath)).toBe("feature-b");
+  expect(worktreeListPaths(main.repoDir)).toContain(result.worktree.worktreePath);
+  expect(worktreeListPaths(secondary.repoDir)).toContain(created.worktree.worktreePath);
+  expect(result.workspace.worktreeRoot).toBe(result.worktree.worktreePath);
+  expect(result.workspace.secondaryCheckouts).toEqual([
+    {
+      projectId: expect.any(String),
+      displayName: "repo",
+      repoRoot: created.repoRoot,
+      worktreePath: created.worktree.worktreePath,
+      branch: "feature-b",
+      baseBranch: "main",
+    },
+  ]);
+});
+
+test("rolls back created worktrees when a secondary fails", async () => {
+  const main = createGitRepo();
+  cleanupPaths.push(main.tempDir);
+  const deps = createDeps();
+  const paseoHome = path.join(main.tempDir, ".paseo");
+  const missingRepo = path.join(main.tempDir, "definitely-missing-repo");
+
+  await expect(
+    createPaseoWorktree(
+      {
+        cwd: main.repoDir,
+        worktreeSlug: "multi-rollback",
+        runSetup: false,
+        paseoHome,
+        secondaries: [{ cwd: missingRepo, refName: "main" }],
+      },
+      deps,
+    ),
+  ).rejects.toThrow();
+  expect(deps.workspaces.size).toBe(0);
+});
+
 test("repairs a legacy source workspace whose project record is missing", async () => {
   const { repoDir, tempDir } = createGitRepo();
   cleanupPaths.push(tempDir);
@@ -1311,6 +1383,20 @@ function createWorkspaceGitSnapshot(cwd: string): WorkspaceGitRuntimeSnapshot {
       error: null,
     },
   };
+}
+
+function readWorktreeCurrentBranch(cwd: string): string {
+  return execFileSync("git", ["branch", "--show-current"], { cwd, stdio: "pipe" })
+    .toString()
+    .trim();
+}
+
+function worktreeListPaths(repoDir: string): string[] {
+  return execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: repoDir, stdio: "pipe" })
+    .toString()
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => line.slice("worktree ".length).trim());
 }
 
 function createGitRepo(): { tempDir: string; repoDir: string } {

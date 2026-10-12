@@ -9874,3 +9874,201 @@ test("workspace.todos.get.request and workspace.todos.set.request store and broa
     rmSync(tempHome, { recursive: true, force: true });
   }
 });
+
+test("workspace.create.request persists linked repo roots and echoes them in the descriptor", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "session-linked-repos-test-"));
+  const linkedA = path.join(tempRoot, "service-b");
+  const linkedB = path.join(tempRoot, "shared-lib");
+  mkdirSync(linkedA, { recursive: true });
+  mkdirSync(linkedB, { recursive: true });
+  const workspaces = new Map<string, PersistedWorkspaceRecord>();
+  try {
+    const session = createSessionForWorkspaceTests({
+      onMessage: (message) => emitted.push(message),
+    });
+    session.filesystem.isDirectory = async (target: string) =>
+      target === REPO_CWD || (existsSync(target) && statSync(target).isDirectory());
+    session.workspaceRegistry.upsert = async (record: unknown) => {
+      const workspace = record as PersistedWorkspaceRecord;
+      workspaces.set(workspace.workspaceId, workspace);
+    };
+
+    await session.handleMessage({
+      type: "workspace.create.request",
+      requestId: "req-linked-roots",
+      linkedRepoRoots: [linkedA, "  ", linkedB, linkedA, REPO_CWD],
+      source: { kind: "directory", path: REPO_CWD },
+    });
+
+    const response = findByType(emitted, "workspace.create.response");
+    expect(response?.payload).toMatchObject({
+      requestId: "req-linked-roots",
+      error: null,
+      workspace: { linkedRepoRoots: [linkedA, linkedB] },
+    });
+    const workspaceId = response?.payload.workspace?.id as string;
+    expect(workspaces.get(workspaceId)?.linkedRepoRoots).toEqual([linkedA, linkedB]);
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("workspace.create.request rejects a missing linked repo root", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+  session.filesystem.isDirectory = async (target: string) => target === REPO_CWD;
+
+  await session.handleMessage({
+    type: "workspace.create.request",
+    requestId: "req-linked-roots-missing",
+    linkedRepoRoots: [path.join(tmpdir(), "session-linked-repos-definitely-missing")],
+    source: { kind: "directory", path: REPO_CWD },
+  });
+
+  expect(findByType(emitted, "workspace.create.response")?.payload).toMatchObject({
+    requestId: "req-linked-roots-missing",
+    workspace: null,
+    errorCode: "linked_repo_not_found",
+  });
+});
+
+test("workspace.create.request forwards secondary worktrees and echoes checkouts", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const tempRoot = mkdtempSync(path.join(tmpdir(), "session-secondary-test-"));
+  const secondaryRepo = path.join(tempRoot, "service-b");
+  mkdirSync(secondaryRepo, { recursive: true });
+  const workspaces = new Map<string, PersistedWorkspaceRecord>();
+  try {
+    const session = createSessionForWorkspaceTests({
+      onMessage: (message) => emitted.push(message),
+    });
+    session.filesystem.isDirectory = async () => true;
+    session.workspaceRegistry.upsert = async (record: unknown) => {
+      workspaces.set(
+        (record as PersistedWorkspaceRecord).workspaceId,
+        record as PersistedWorkspaceRecord,
+      );
+    };
+    const seenInputs: unknown[] = [];
+    const internals = asSessionInternals(session);
+    internals.createPaseoWorktreeWorkflow = (async (input: unknown) => {
+      seenInputs.push(input);
+      const workspace = createPersistedWorkspaceRecord({
+        workspaceId: "ws-secondary",
+        projectId: "proj-main",
+        cwd: path.join(tempRoot, "main-checkout"),
+        kind: "worktree",
+        displayName: "main",
+        secondaryCheckouts: [
+          {
+            projectId: "proj-b",
+            displayName: "service-b",
+            repoRoot: secondaryRepo,
+            worktreePath: path.join(tempRoot, "service-b-checkout"),
+            branch: "paseo/secondary",
+            baseBranch: "main",
+          },
+        ],
+        createdAt: "2026-09-13T00:00:00.000Z",
+        updatedAt: "2026-09-13T00:00:00.000Z",
+      });
+      return {
+        worktree: { worktreePath: path.join(tempRoot, "main-checkout"), branchName: "paseo/main" },
+        intent: { kind: "branch-off", branchName: "paseo/main" },
+        workspace,
+        repoRoot: REPO_CWD,
+        created: true,
+        secondaries: [],
+      };
+    }) as typeof internals.createPaseoWorktreeWorkflow;
+
+    await session.handleMessage({
+      type: "workspace.create.request",
+      requestId: "req-secondary",
+      secondaryWorktrees: [{ cwd: secondaryRepo, refName: "main" }],
+      source: { kind: "worktree", cwd: REPO_CWD, worktreeSlug: "multi-main" },
+    });
+
+    expect(seenInputs).toHaveLength(1);
+    expect(seenInputs[0]).toMatchObject({
+      cwd: REPO_CWD,
+      secondaries: [{ cwd: secondaryRepo, refName: "main" }],
+    });
+    const response = findByType(emitted, "workspace.create.response");
+    expect(response?.payload).toMatchObject({
+      requestId: "req-secondary",
+      error: null,
+      workspace: {
+        id: "ws-secondary",
+        secondaryCheckouts: [
+          {
+            displayName: "service-b",
+            repoRoot: secondaryRepo,
+            branch: "paseo/secondary",
+            baseBranch: "main",
+          },
+        ],
+      },
+    });
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("workspace.create.request rejects a secondary without a source", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+
+  await session.handleMessage({
+    type: "workspace.create.request",
+    requestId: "req-secondary-no-source",
+    secondaryWorktrees: [{ refName: "main" }],
+    source: { kind: "worktree", cwd: REPO_CWD, worktreeSlug: "multi-main" },
+  });
+
+  expect(findByType(emitted, "workspace.create.response")?.payload).toMatchObject({
+    requestId: "req-secondary-no-source",
+    workspace: null,
+    errorCode: "secondary_source_required",
+  });
+});
+
+test("workspace.create.request rejects a secondary duplicating the main repo", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+
+  await session.handleMessage({
+    type: "workspace.create.request",
+    requestId: "req-secondary-duplicate",
+    secondaryWorktrees: [{ cwd: REPO_CWD, refName: "main" }],
+    source: { kind: "worktree", cwd: REPO_CWD, worktreeSlug: "multi-main" },
+  });
+
+  expect(findByType(emitted, "workspace.create.response")?.payload).toMatchObject({
+    requestId: "req-secondary-duplicate",
+    workspace: null,
+    errorCode: "duplicate_secondary_worktree",
+  });
+});
+
+test("workspace.create.request rejects too many secondary worktrees", async () => {
+  const emitted: SessionOutboundMessage[] = [];
+  const session = createSessionForWorkspaceTests({ onMessage: (message) => emitted.push(message) });
+
+  await session.handleMessage({
+    type: "workspace.create.request",
+    requestId: "req-secondary-too-many",
+    secondaryWorktrees: Array.from({ length: 11 }, (_, index) => ({
+      cwd: path.join(tmpdir(), `session-secondary-overflow-${index}`),
+      refName: "main",
+    })),
+    source: { kind: "worktree", cwd: REPO_CWD, worktreeSlug: "multi-main" },
+  });
+
+  expect(findByType(emitted, "workspace.create.response")?.payload).toMatchObject({
+    requestId: "req-secondary-too-many",
+    workspace: null,
+    errorCode: "too_many_secondary_worktrees",
+  });
+});

@@ -28,6 +28,7 @@ function makeDescriptor(overrides: {
   name?: string | null;
   currentBranch?: string | null;
   diffStat?: { additions: number; deletions: number } | null;
+  secondaryCheckouts?: { worktreePath: string }[];
 }): WorkspaceDescriptorPayload {
   return {
     id: overrides.id,
@@ -39,6 +40,7 @@ function makeDescriptor(overrides: {
       ? { gitRuntime: { currentBranch: overrides.currentBranch } }
       : {}),
     diffStat: overrides.diffStat ?? null,
+    ...(overrides.secondaryCheckouts ? { secondaryCheckouts: overrides.secondaryCheckouts } : {}),
   } as unknown as WorkspaceDescriptorPayload;
 }
 
@@ -206,6 +208,47 @@ describe("syncObservers", () => {
     expect(h.unsubscribeCalls).toEqual([]);
     h.emitSnapshot(WS1, "feature");
     expect(h.branchChanges).toEqual([["ws2", null, "feature"]]);
+  });
+
+  test("registers secondary checkout paths for a multi-repo workspace", () => {
+    const h = buildHarness();
+    const main = resolve("/repo/container/main");
+    const secondary = resolve("/repo/container/service-b");
+    h.service.syncObservers([
+      makeDescriptor({
+        id: "ws-multi",
+        workspaceDirectory: resolve("/repo/container"),
+        projectKind: "directory",
+        workspaceKind: "directory",
+        secondaryCheckouts: [{ worktreePath: main }, { worktreePath: secondary }],
+      }),
+    ]);
+    // The non-git container itself gets no subscription; both real checkouts do.
+    expect(h.registerCalls).toEqual([main, secondary]);
+    h.emitSnapshot(secondary, "feature-b");
+    expect(h.statusCalls).toEqual([{ cwd: secondary, branch: "feature-b" }]);
+  });
+
+  test("tears down secondary checkouts with the workspace", () => {
+    const h = buildHarness();
+    const main = resolve("/repo/container/main");
+    const secondary = resolve("/repo/container/service-b");
+    h.service.syncObservers([
+      makeDescriptor({
+        id: "ws-multi",
+        workspaceDirectory: resolve("/repo/container"),
+        projectKind: "directory",
+        workspaceKind: "directory",
+        secondaryCheckouts: [{ worktreePath: main }, { worktreePath: secondary }],
+      }),
+    ]);
+    h.service.removeForWorkspaceId("ws-multi");
+    expect(h.unsubscribeCalls).toEqual(expect.arrayContaining([main, secondary]));
+    expect(h.service.getMetrics()).toEqual({
+      watchedDirectoryCount: 0,
+      workspaceRecordCount: 0,
+      subscriptionCount: 0,
+    });
   });
 
   test("reports observer ownership as workspaces are added and removed", () => {

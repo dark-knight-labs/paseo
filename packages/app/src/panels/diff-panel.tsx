@@ -16,7 +16,8 @@ import { useAppSettings } from "@/hooks/use-settings";
 import { usePaneContext } from "@/panels/pane-context";
 import { definePanel, type PanelDescriptor, type PanelPresentation } from "@/panels/panel-registry";
 import { useAddFileToChat } from "@/panels/use-add-file-to-chat";
-import { useWorkspaceDirectory } from "@/stores/session-store-hooks";
+import { useWorkspace, useWorkspaceDirectory } from "@/stores/session-store-hooks";
+import { listWorkspaceCheckouts } from "@/workspace/multi-repo-checkouts";
 import type { WorkspaceTabTarget } from "@/workspace-tabs/model";
 import { defaultChangesState, changesStateSchema } from "@/panels/changes/state";
 import { usePanelState } from "@/panels/use-panel-state";
@@ -91,6 +92,11 @@ function ChangesPanel() {
   const [changesState, setChangesState] = usePanelState(changesStateSchema, defaultChangesState);
   const { preferences } = useChangesPreferences();
   const cwd = useWorkspaceDirectory(serverId, workspaceId);
+  const workspace = useWorkspace(serverId, workspaceId);
+  const checkouts = useMemo(
+    () => (workspace ? listWorkspaceCheckouts(workspace) : undefined),
+    [workspace],
+  );
   const isActive = useRetainedPanelActive();
   const { addFile, canAddToChat } = useAddFileToChat({ serverId, workspaceId });
   invariant(
@@ -133,6 +139,7 @@ function ChangesPanel() {
           serverId={serverId}
           workspaceId={workspaceId}
           cwd={cwd}
+          checkouts={checkouts}
           enabled={isActive}
           presentation={presentation}
           modeScope={tabId}

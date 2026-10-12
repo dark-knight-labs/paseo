@@ -1317,6 +1317,15 @@ export const fr: TranslationResources = {
       searchPlaceholder: "Rechercher des succursales et des PR",
       title: "Commencer à partir de",
     },
+    additionalRepos: {
+      addAnother: "Add another",
+      title: "Additional repositories",
+      projectTitle: "Additional repository",
+      remove: "Remove {{name}}",
+      projectPlaceholder: "Choose repository",
+      basePlaceholder: "Choose starting ref",
+      noEligibleProjects: "No other worktree-capable projects on this host.",
+    },
     launch: {
       title: "What to launch",
       chat: "Chat",
@@ -1542,6 +1551,14 @@ export const fr: TranslationResources = {
       open_failed: "Impossible d’ouvrir le projet.",
     },
     openPath: "Ouvrir le chemin",
+  },
+  checkoutSwitcher: {
+    triggerTooltip: "Switch repository",
+    currentCheckout: "Current repository: {{name}}. Press to switch repository.",
+    placeholder: "Switch repository...",
+    searchPlaceholder: "Filter repositories...",
+    empty: "No repositories found.",
+    title: "Switch repository",
   },
   branchSwitcher: {
     triggerTooltip: "Changer la branche de l’espace de travail",

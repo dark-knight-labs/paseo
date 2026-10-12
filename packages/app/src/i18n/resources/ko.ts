@@ -1292,6 +1292,15 @@ export const ko: TranslationResources = {
       searchPlaceholder: "브랜치와 PR 검색",
       title: "시작 위치",
     },
+    additionalRepos: {
+      addAnother: "Add another",
+      title: "Additional repositories",
+      projectTitle: "Additional repository",
+      remove: "Remove {{name}}",
+      projectPlaceholder: "Choose repository",
+      basePlaceholder: "Choose starting ref",
+      noEligibleProjects: "No other worktree-capable projects on this host.",
+    },
     launch: {
       title: "What to launch",
       chat: "Chat",
@@ -1507,6 +1516,14 @@ export const ko: TranslationResources = {
       open_failed: "프로젝트를 열 수 없습니다.",
     },
     openPath: "경로 열기",
+  },
+  checkoutSwitcher: {
+    triggerTooltip: "Switch repository",
+    currentCheckout: "Current repository: {{name}}. Press to switch repository.",
+    placeholder: "Switch repository...",
+    searchPlaceholder: "Filter repositories...",
+    empty: "No repositories found.",
+    title: "Switch repository",
   },
   branchSwitcher: {
     triggerTooltip: "워크스페이스 브랜치 전환",

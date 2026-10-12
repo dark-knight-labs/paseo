@@ -15,6 +15,10 @@ interface WorkspaceGitWatchTarget {
 
 interface WorkspaceGitWatchState {
   cwd: string;
+  // Fork multi-repo (#3254): extra checkout paths watched under the same
+  // workspace id. The primary cwd keeps exact current semantics; extras only
+  // add watch targets + subscriptions so per-checkout snapshots stay live.
+  extraCwds: Set<string>;
   latestDescriptorStateKey: string | null;
   lastBranchName: string | null;
 }
@@ -116,16 +120,23 @@ export function createWorkspaceGitObserverService(deps: {
     subscriptions.delete(normalizedCwd);
   }
 
+  function detachWorkspaceFromCwd(workspaceId: string, cwd: string): void {
+    const target = watchTargets.get(cwd);
+    target?.workspaceIds.delete(workspaceId);
+    if (target?.workspaceIds.size === 0) {
+      removeForCwd(cwd);
+    }
+  }
+
   function removeForWorkspaceId(workspaceId: string): void {
     const state = workspaceStates.get(workspaceId);
     if (!state) {
       return;
     }
     workspaceStates.delete(workspaceId);
-    const target = watchTargets.get(state.cwd);
-    target?.workspaceIds.delete(workspaceId);
-    if (target?.workspaceIds.size === 0) {
-      removeForCwd(state.cwd);
+    detachWorkspaceFromCwd(workspaceId, state.cwd);
+    for (const extraCwd of state.extraCwds) {
+      detachWorkspaceFromCwd(workspaceId, extraCwd);
     }
   }
 
@@ -168,11 +179,50 @@ export function createWorkspaceGitObserverService(deps: {
     if (!workspaceStates.has(options.workspaceId)) {
       workspaceStates.set(options.workspaceId, {
         cwd: normalizedCwd,
+        extraCwds: new Set<string>(),
         latestDescriptorStateKey: null,
         lastBranchName: null,
       });
     }
 
+    subscribeCwd(normalizedCwd, options.workspaceId);
+  }
+
+  /**
+   * Fork multi-repo (#3254): watches one extra checkout path under an existing
+   * workspace id. Shares the workspace's branch/descriptor state (branch
+   * tracking stays primary-only) and tears down with removeForWorkspaceId.
+   */
+  function syncExtraObserver(cwd: string, workspaceId: string): void {
+    const normalizedCwd = resolve(cwd);
+    let state = workspaceStates.get(workspaceId);
+    if (!state) {
+      // Multi-repo containers are non-git, so the primary sync leaves no
+      // state behind. Anchor on the first extra: it behaves like a primary
+      // for teardown bookkeeping (branch/descriptor tracking stays inert
+      // without a real primary cwd).
+      state = {
+        cwd: normalizedCwd,
+        extraCwds: new Set<string>(),
+        latestDescriptorStateKey: null,
+        lastBranchName: null,
+      };
+      workspaceStates.set(workspaceId, state);
+    } else if (state.cwd === normalizedCwd || state.extraCwds.has(normalizedCwd)) {
+      return;
+    } else {
+      state.extraCwds.add(normalizedCwd);
+    }
+    const target = watchTargets.get(normalizedCwd) ?? {
+      workspaceIds: new Set<string>(),
+    };
+    watchTargets.set(normalizedCwd, target);
+    target.workspaceIds.add(workspaceId);
+
+    subscribeCwd(normalizedCwd, workspaceId);
+  }
+
+  function subscribeCwd(normalizedCwd: string, workspaceId: string): void {
     if (subscriptions.has(normalizedCwd)) {
       return;
     }
@@ -190,7 +240,7 @@ export function createWorkspaceGitObserverService(deps: {
         emitStatusUpdate(normalizedCwd, snapshot);
       });
     } catch (error) {
-      removeForWorkspaceId(options.workspaceId);
+      removeForWorkspaceId(workspaceId);
       throw error;
     }
     subscriptions.set(normalizedCwd, subscription.unsubscribe);
@@ -202,6 +252,11 @@ export function createWorkspaceGitObserverService(deps: {
         isGit: workspace.workspaceKind !== "directory",
         workspaceId: workspace.id,
       });
+      // Secondary checkouts are real git repos staged in the container; watch
+      // each so status/diff subscribers get live data by explicit cwd.
+      for (const checkout of workspace.secondaryCheckouts ?? []) {
+        syncExtraObserver(checkout.worktreePath, workspace.id);
+      }
       rememberDescriptorState(workspace.id, workspace);
     }
   }

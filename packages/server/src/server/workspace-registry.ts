@@ -93,6 +93,23 @@ const PersistedWorkspaceRecordSchema = z.object({
     .optional()
     .transform((value) => value ?? null),
   labels: z.array(z.string()).optional(),
+  // COMPAT(linkedRepoRoots): fork multi-repo context roots for discussion #3254.
+  // Optional so pre-fork records parse unchanged; absent means "no linked context".
+  linkedRepoRoots: z.array(z.string()).optional(),
+  // COMPAT(secondaryCheckouts): fork multi-repo worktree checkouts for #3254.
+  // Optional so pre-fork records parse unchanged; absent means single-repo.
+  secondaryCheckouts: z
+    .array(
+      z.object({
+        projectId: z.string(),
+        displayName: z.string(),
+        repoRoot: z.string(),
+        worktreePath: z.string(),
+        branch: z.string().nullable(),
+        baseBranch: z.string().nullable(),
+      }),
+    )
+    .optional(),
 });
 
 export type PersistedProjectRecord = z.infer<typeof PersistedProjectRecordSchema>;
@@ -674,6 +691,8 @@ export function createPersistedWorkspaceRecord(input: {
   autoArchivedChangeRequestUrl?: string | null;
   pinnedAt?: string | null;
   labels?: string[];
+  linkedRepoRoots?: string[];
+  secondaryCheckouts?: PersistedWorkspaceRecord["secondaryCheckouts"];
 }): PersistedWorkspaceRecord {
   return PersistedWorkspaceRecordSchema.parse({
     ...input,

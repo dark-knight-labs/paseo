@@ -39,6 +39,7 @@ import type {
   ServerCapabilities,
   WorkspaceDescriptorPayload,
   WorkspaceProjectDescriptorPayload,
+  WorkspaceSecondaryCheckout,
 } from "@getpaseo/protocol/messages";
 import {
   normalizeWorkspaceOpaqueId,
@@ -128,6 +129,13 @@ export interface WorkspaceDescriptor {
   githubRuntime?: WorkspaceDescriptorPayload["githubRuntime"];
   forge?: WorkspaceDescriptorPayload["forge"];
   project?: ProjectPlacementPayload;
+  // Fork multi-repo (#3254): secondary worktree checkouts staged in the workspace
+  // container. Optional so fixtures and old payloads stay single-repo by default;
+  // normalizeWorkspaceDescriptor always materializes it.
+  secondaryCheckouts?: WorkspaceSecondaryCheckout[];
+  // Fork multi-repo (#3254): relocated main checkout path. Present only alongside
+  // secondaryCheckouts; otherwise the main checkout is the workspace directory.
+  worktreeRoot?: string | null;
 }
 
 export function normalizeWorkspaceDescriptor(
@@ -166,6 +174,13 @@ export function normalizeWorkspaceDescriptor(
     githubRuntime: payload.githubRuntime,
     forge: payload.forge,
     project: payload.project,
+    // COMPAT(secondaryCheckouts): old daemons omit the field; treat as single-repo.
+    secondaryCheckouts: (payload.secondaryCheckouts ?? []).map((checkout) =>
+      Object.assign({}, checkout),
+    ),
+    // COMPAT(worktreeRoot): only multi-repo daemons send it; null keeps the
+    // "main checkout is the workspace directory" default for everything else.
+    worktreeRoot: payload.worktreeRoot ?? null,
   };
 }
 

@@ -21,6 +21,7 @@ import {
   type DirectorySuggestionsRequest,
   type ProjectPlacementPayload,
   type WorkspaceSetupSnapshot,
+  type WorkspaceCreateRequest,
   type WorkspaceDescriptorPayload,
 } from "./messages.js";
 import type {
@@ -212,7 +213,7 @@ import {
   matchesAgentUpdatesFilter,
   type AgentUpdatesService,
 } from "./session/agent-updates/agent-updates-service.js";
-import { expandTilde } from "../utils/path.js";
+import { areEquivalentPaths, expandTilde } from "../utils/path.js";
 import {
   searchDirectoryEntries,
   WORKSPACE_SEARCH_HIDDEN_DIRECTORIES,
@@ -255,6 +256,57 @@ import {
   handleWorkspaceSetupStatusRequest as handleWorkspaceSetupStatusRequestMessage,
 } from "./worktree-session.js";
 import { archiveByScope, type ActiveWorkspaceRef } from "./workspace-archive-service.js";
+import { MAX_LINKED_REPO_ROOTS, normalizeLinkedRepoRoots } from "./workspace-linked-repos.js";
+
+/**
+ * Conditional wire field for fork multi-repo context roots (discussion #3254).
+ * Emits the field only when the workspace declares linked roots so old payloads
+ * stay minimal; absent means none.
+ */
+function linkedRepoRootsField(workspace: Pick<PersistedWorkspaceRecord, "linkedRepoRoots">): {
+  linkedRepoRoots?: string[];
+} {
+  if (workspace.linkedRepoRoots && workspace.linkedRepoRoots.length > 0) {
+    return { linkedRepoRoots: workspace.linkedRepoRoots };
+  }
+  return {};
+}
+
+/**
+ * Conditional wire field for fork multi-repo checkouts (discussion #3254).
+ * Emits the field only when the workspace owns secondary checkouts so old
+ * payloads stay minimal; absent means single-repo.
+ */
+function secondaryCheckoutsField(workspace: Pick<PersistedWorkspaceRecord, "secondaryCheckouts">): {
+  secondaryCheckouts?: NonNullable<PersistedWorkspaceRecord["secondaryCheckouts"]>;
+} {
+  if (workspace.secondaryCheckouts && workspace.secondaryCheckouts.length > 0) {
+    return {
+      secondaryCheckouts: workspace.secondaryCheckouts.map((checkout) => ({ ...checkout })),
+    };
+  }
+  return {};
+}
+
+/**
+ * Conditional wire field for the fork multi-repo main checkout path (#3254).
+ * Emitted alongside secondaryCheckouts only; absent means the main checkout
+ * is the workspace directory itself (single-repo) or an old daemon.
+ */
+function multiRepoWorktreeRootField(
+  workspace: Pick<PersistedWorkspaceRecord, "secondaryCheckouts" | "worktreeRoot">,
+): {
+  worktreeRoot?: string;
+} {
+  if (
+    workspace.secondaryCheckouts &&
+    workspace.secondaryCheckouts.length > 0 &&
+    workspace.worktreeRoot
+  ) {
+    return { worktreeRoot: workspace.worktreeRoot };
+  }
+  return {};
+}
 import { WorkspaceSetupRuntime } from "./workspace-setup-runtime.js";
 import { SessionAuthorization, type DaemonPermission } from "./authorization/index.js";
 
@@ -5261,6 +5313,9 @@ export class Session {
       title: workspace.title,
       pinnedAt: workspace.pinnedAt,
       ...(workspace.labels && workspace.labels.length > 0 ? { labels: workspace.labels } : {}),
+      ...linkedRepoRootsField(workspace),
+      ...secondaryCheckoutsField(workspace),
+      ...multiRepoWorktreeRootField(workspace),
       archivingAt: null,
       status: "done",
       statusEnteredAt: null,
@@ -5355,6 +5410,9 @@ export class Session {
       ...(result.workspace.labels && result.workspace.labels.length > 0
         ? { labels: result.workspace.labels }
         : {}),
+      ...linkedRepoRootsField(result.workspace),
+      ...secondaryCheckoutsField(result.workspace),
+      ...multiRepoWorktreeRootField(result.workspace),
       archivingAt: null,
       status: "done",
       statusEnteredAt: result.workspace.createdAt,
@@ -6355,6 +6413,147 @@ export class Session {
     }
   }
 
+  /**
+   * Normalizes declared multi-repo context roots for a workspace.create request
+   * and rejects roots that are not directories. Returns null after emitting the
+   * error response so callers can bail out.
+   */
+  private async resolveLinkedRepoRootsForCreate(
+    requested: readonly string[] | undefined,
+    cwd: string,
+    requestId: string,
+  ): Promise<string[] | null> {
+    if (!requested || requested.length === 0) {
+      return [];
+    }
+    const roots = normalizeLinkedRepoRoots({
+      cwd,
+      roots: requested.map((root) => expandTilde(root)),
+    });
+    for (const root of roots) {
+      const isDirectory = await this.filesystem.isDirectory(root).catch(() => false);
+      if (!isDirectory) {
+        this.emit({
+          type: "workspace.create.response",
+          payload: {
+            requestId,
+            workspace: null,
+            setupTerminalId: null,
+            error: `Linked repository not found: ${root}`,
+            errorCode: "linked_repo_not_found",
+          },
+        });
+        return null;
+      }
+    }
+    return roots;
+  }
+
+  /**
+   * Resolves secondary multi-repo checkouts for a workspace.create worktree
+   * request. Each entry needs a project (cwd or projectId) on this host; the
+   * main repo is excluded so the primary checkout is never duplicated.
+   * Returns null after emitting the error response so callers can bail out.
+   */
+  private async resolveSecondaryWorktreesForCreate(
+    requested: WorkspaceCreateRequest["secondaryWorktrees"],
+    mainSourceCwd: string,
+    requestId: string,
+  ): Promise<
+    | {
+        cwd: string;
+        projectId?: string;
+        refName?: string;
+        branchName?: string;
+        worktreeSlug?: string;
+      }[]
+    | null
+  > {
+    if (!requested || requested.length === 0) {
+      return [];
+    }
+    if (requested.length > MAX_LINKED_REPO_ROOTS) {
+      this.emit({
+        type: "workspace.create.response",
+        payload: {
+          requestId,
+          workspace: null,
+          setupTerminalId: null,
+          error: `Too many additional repositories: maximum ${MAX_LINKED_REPO_ROOTS}`,
+          errorCode: "too_many_secondary_worktrees",
+        },
+      });
+      return null;
+    }
+    const resolved: {
+      cwd: string;
+      projectId?: string;
+      refName?: string;
+      branchName?: string;
+      worktreeSlug?: string;
+    }[] = [];
+    const seenCwds: string[] = [];
+    for (const secondary of requested) {
+      if (!secondary.cwd && !secondary.projectId) {
+        this.emit({
+          type: "workspace.create.response",
+          payload: {
+            requestId,
+            workspace: null,
+            setupTerminalId: null,
+            error: "Each additional repository needs a project to check out from",
+            errorCode: "secondary_source_required",
+          },
+        });
+        return null;
+      }
+      let cwd: string;
+      try {
+        cwd = await resolveWorktreeSourceCwd(
+          { cwd: secondary.cwd, projectId: secondary.projectId },
+          this.projectRegistry,
+        );
+      } catch {
+        this.emit({
+          type: "workspace.create.response",
+          payload: {
+            requestId,
+            workspace: null,
+            setupTerminalId: null,
+            error: `Additional repository not found: ${secondary.projectId ?? secondary.cwd}`,
+            errorCode: "secondary_repo_not_found",
+          },
+        });
+        return null;
+      }
+      if (
+        areEquivalentPaths(cwd, mainSourceCwd) ||
+        seenCwds.some((seen) => areEquivalentPaths(seen, cwd))
+      ) {
+        this.emit({
+          type: "workspace.create.response",
+          payload: {
+            requestId,
+            workspace: null,
+            setupTerminalId: null,
+            error: "Each additional repository must be a different repository",
+            errorCode: "duplicate_secondary_worktree",
+          },
+        });
+        return null;
+      }
+      seenCwds.push(cwd);
+      resolved.push({
+        cwd,
+        ...(secondary.projectId ? { projectId: secondary.projectId } : {}),
+        ...(secondary.refName ? { refName: secondary.refName } : {}),
+        ...(secondary.branchName ? { branchName: secondary.branchName } : {}),
+        ...(secondary.worktreeSlug ? { worktreeSlug: secondary.worktreeSlug } : {}),
+      });
+    }
+    return resolved;
+  }
+
   private async handleWorkspaceCreateLocal(
     request: Extract<SessionInboundMessage, { type: "workspace.create.request" }>,
   ): Promise<void> {
@@ -6380,11 +6579,22 @@ export class Session {
 
     const explicitTitle = request.title?.trim() || null;
     const promptTitle = resolveFirstAgentPromptTitle(request.firstAgentContext);
+    const linkedRepoRoots = await this.resolveLinkedRepoRootsForCreate(
+      request.linkedRepoRoots,
+      cwd,
+      request.requestId,
+    );
+    if (linkedRepoRoots === null) {
+      return;
+    }
     const workspace = await this.workspaceProvisioning.createWorkspaceForDirectory(
       cwd,
       explicitTitle ?? promptTitle,
       request.source.projectId,
-      { expectsInitialAgent: Boolean(request.firstAgentContext) },
+      {
+        expectsInitialAgent: Boolean(request.firstAgentContext),
+        ...(linkedRepoRoots.length > 0 ? { linkedRepoRoots } : {}),
+      },
     );
     await this.syncWorkspaceGitObserverForWorkspace(workspace);
     const descriptor = await this.describeWorkspaceRecord(workspace);
@@ -6447,6 +6657,23 @@ export class Session {
 
     const sourceCwd = await resolveWorktreeSourceCwd(source, this.projectRegistry);
 
+    const linkedRepoRoots = await this.resolveLinkedRepoRootsForCreate(
+      request.linkedRepoRoots,
+      sourceCwd,
+      request.requestId,
+    );
+    if (linkedRepoRoots === null) {
+      return;
+    }
+    const secondaries = await this.resolveSecondaryWorktreesForCreate(
+      request.secondaryWorktrees,
+      sourceCwd,
+      request.requestId,
+    );
+    if (secondaries === null) {
+      return;
+    }
+
     const result = await this.createPaseoWorktreeWorkflow(
       {
         cwd: sourceCwd,
@@ -6459,6 +6686,8 @@ export class Session {
         githubPrNumber: source.githubPrNumber,
         firstAgentContext: request.firstAgentContext,
         title: request.title,
+        ...(linkedRepoRoots.length > 0 ? { linkedRepoRoots } : {}),
+        ...(secondaries.length > 0 ? { secondaries } : {}),
       },
       source.baseBranch
         ? { resolveDefaultBranch: async () => source.baseBranch as string }

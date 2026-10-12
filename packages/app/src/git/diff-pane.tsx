@@ -65,6 +65,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { GitActionsSplitButton } from "@/git/actions-split-button";
 import type { GitActions } from "@/git/policy";
 import { BranchSwitcher } from "@/components/branch-switcher";
+import { CheckoutSwitcher } from "@/components/checkout-switcher";
+import { useActiveCheckout, type WorkspaceCheckoutOption } from "@/workspace/multi-repo-checkouts";
 import { useGitActions } from "@/git/use-actions";
 import { GIT_ACTION_ICONS } from "@/git/action-icons";
 import { buildForgeSignInCommand, getForgePresentation, type Forge } from "@/git/forge";
@@ -185,6 +187,9 @@ interface ChangesSurfaceProps {
   serverId: string;
   workspaceId?: string | null;
   cwd: string;
+  // Fork multi-repo (#3254): all checkouts of the workspace. When >1, a repo
+  // switcher re-targets every query in this surface at the selected checkout.
+  checkouts?: WorkspaceCheckoutOption[];
   enabled?: boolean;
   presentation?: ChangesPresentation;
   modeScope: string;
@@ -470,6 +475,12 @@ interface ChangesRepositoryToolbarModel {
   pullRequest: ChangesPullRequestLinkModel | null;
   serverId: string;
   workspaceId?: string | null;
+  // Fork multi-repo (#3254): present only when the workspace owns >1 checkout.
+  checkoutSwitcher: {
+    checkouts: WorkspaceCheckoutOption[];
+    selectedKey: string;
+    onSelect: (key: string) => void;
+  } | null;
 }
 
 interface ChangesComparisonToolbarModel {
@@ -490,6 +501,7 @@ interface ChangesHeaderProps {
 
 interface BuildChangesHeaderModelInput {
   branchName: string | null;
+  checkoutSwitcher: ChangesRepositoryToolbarModel["checkoutSwitcher"];
   committedDescription?: string;
   compact: boolean;
   cwd: string;
@@ -512,6 +524,7 @@ function buildChangesHeaderModel(input: BuildChangesHeaderModelInput): {
   return {
     repository: {
       branchName: input.branchName,
+      checkoutSwitcher: input.checkoutSwitcher,
       cwd: input.cwd,
       gitActions: input.compact ? input.gitActions : null,
       pullRequest: input.pullRequest
@@ -628,14 +641,33 @@ function ChangesRepositoryToolbar({
       testID="changes-repository-header"
     >
       <ChangesToolbarLeading>
-        <BranchSwitcher
-          currentBranchName={model.branchName}
-          serverId={model.serverId}
-          workspaceId={model.workspaceId ?? model.cwd}
-          workspaceDirectory={model.cwd}
-          isGitCheckout
-          testID="changes-branch-switcher"
-        />
+        {model.checkoutSwitcher ? (
+          <View style={styles.changesRepoColumn}>
+            <CheckoutSwitcher
+              checkouts={model.checkoutSwitcher.checkouts}
+              selectedKey={model.checkoutSwitcher.selectedKey}
+              onSelect={model.checkoutSwitcher.onSelect}
+              testID="changes-checkout-switcher"
+            />
+            <BranchSwitcher
+              currentBranchName={model.branchName}
+              serverId={model.serverId}
+              workspaceId={model.workspaceId ?? model.cwd}
+              workspaceDirectory={model.cwd}
+              isGitCheckout
+              testID="changes-branch-switcher"
+            />
+          </View>
+        ) : (
+          <BranchSwitcher
+            currentBranchName={model.branchName}
+            serverId={model.serverId}
+            workspaceId={model.workspaceId ?? model.cwd}
+            workspaceDirectory={model.cwd}
+            isGitCheckout
+            testID="changes-branch-switcher"
+          />
+        )}
       </ChangesToolbarLeading>
       <ChangesToolbarTrailing>
         {model.pullRequest ? (
@@ -1563,6 +1595,7 @@ export function ChangesSurface({
   serverId,
   workspaceId,
   cwd,
+  checkouts,
   enabled,
   presentation = "combined",
   modeScope,
@@ -1578,6 +1611,15 @@ export function ChangesSurface({
   const { settings: appSettings } = useAppSettings();
   const { preferences, updatePreferences } = useChangesPreferences();
   const { t } = useTranslation();
+  // Fork multi-repo (#3254): per-pane checkout selection re-targets every
+  // query below at the selected checkout. Single-checkout surfaces keep `cwd`
+  // verbatim — activeCwd === cwd unless >1 checkout.
+  const {
+    multiRepo,
+    selectedKey: selectedCheckoutKey,
+    onSelectCheckout,
+    activeCwd,
+  } = useActiveCheckout({ cwd, checkouts });
   const isMobile = useIsCompactFormFactor();
   const canUseSplitLayout = isWeb && !isMobile;
   const instanceState = changesState ?? defaultChangesState;
@@ -1630,7 +1672,7 @@ export function ChangesSurface({
   } = useDiffTabNavigation({
     serverId,
     workspaceId,
-    cwd,
+    cwd: activeCwd,
     isMobile,
     pullRequestOpenLocation: appSettings.pullRequestOpenLocation,
   });
@@ -1644,17 +1686,18 @@ export function ChangesSurface({
   );
   const runRefresh = useCheckoutGitActionsStore((s) => s.refresh);
   const isRefreshing =
-    useCheckoutGitActionsStore((s) => s.getStatus({ serverId, cwd, actionId: "refresh" })) ===
-    "pending";
+    useCheckoutGitActionsStore((s) =>
+      s.getStatus({ serverId, cwd: activeCwd, actionId: "refresh" }),
+    ) === "pending";
 
   const handleRefresh = useCallback(() => {
     if (isRefreshing) {
       return;
     }
-    void runRefresh({ serverId, cwd }).catch((error) => {
+    void runRefresh({ serverId, cwd: activeCwd }).catch((error) => {
       toast.error(error instanceof Error ? error.message : t("workspace.git.diff.failedRefresh"));
     });
-  }, [cwd, isRefreshing, runRefresh, serverId, t, toast]);
+  }, [activeCwd, isRefreshing, runRefresh, serverId, t, toast]);
 
   const {
     status,
@@ -1676,7 +1719,7 @@ export function ChangesSurface({
   } = useWorkingDiff({
     serverId,
     workspaceId: workspaceId ?? undefined,
-    cwd,
+    cwd: activeCwd,
     ignoreWhitespace: preferences.hideWhitespace,
     enabled: enabled !== false,
     modeScope,
@@ -1684,7 +1727,7 @@ export function ChangesSurface({
   usePublishWorkingDiffAttachment({
     serverId,
     workspaceId: workspaceId ?? undefined,
-    cwd,
+    cwd: activeCwd,
     attachment: reviewAttachment,
     enabled: true,
   });
@@ -1696,7 +1739,7 @@ export function ChangesSurface({
     payloadError: prPayloadError,
   } = useCheckoutPrStatusQuery({
     serverId,
-    cwd,
+    cwd: activeCwd,
     enabled: isGit,
   });
   const forgeProvidersSupported = useSessionStore(
@@ -1737,14 +1780,14 @@ export function ChangesSurface({
     }),
     [appSettings.monoFontFamily, codeFontSize, effectiveLayout, wrapLines],
   );
-  const downloadFile = useFileDownload({ serverId, workspaceId, workspaceRoot: cwd });
+  const downloadFile = useFileDownload({ serverId, workspaceId, workspaceRoot: activeCwd });
   const handleCopyPath = useCallback(
     (path: string) => {
       void Clipboard.setStringAsync(
-        buildAbsoluteExplorerPath({ workspaceRoot: cwd, entryPath: path }),
+        buildAbsoluteExplorerPath({ workspaceRoot: activeCwd, entryPath: path }),
       );
     },
-    [cwd],
+    [activeCwd],
   );
   const handleCopyRelativePath = useCallback((path: string) => {
     void Clipboard.setStringAsync(path);
@@ -1757,8 +1800,8 @@ export function ChangesSurface({
       try {
         await openDesktopTarget({
           editorId: fileManagerTarget.id,
-          workspacePath: cwd,
-          filePath: buildAbsoluteExplorerPath({ workspaceRoot: cwd, entryPath: path }),
+          workspacePath: activeCwd,
+          filePath: buildAbsoluteExplorerPath({ workspaceRoot: activeCwd, entryPath: path }),
         });
       } catch (cause) {
         toast.error(
@@ -1766,7 +1809,7 @@ export function ChangesSurface({
         );
       }
     },
-    [cwd, fileManagerTarget, t, toast],
+    [activeCwd, fileManagerTarget, t, toast],
   );
   const handleDownloadPath = useCallback(
     (path: string) => {
@@ -1780,7 +1823,7 @@ export function ChangesSurface({
         return;
       }
       try {
-        const payload = await client.duplicateFileEntry({ cwd, path });
+        const payload = await client.duplicateFileEntry({ cwd: activeCwd, path });
         if (!payload.success) {
           toast.error(payload.error ?? t("workspace.fileExplorer.errors.duplicateFailed"));
         }
@@ -1788,9 +1831,9 @@ export function ChangesSurface({
         toast.error(cause instanceof Error ? cause.message : String(cause));
       }
     },
-    [client, cwd, t, toast],
+    [client, activeCwd, t, toast],
   );
-  const onRevertPath = useDiscardChangesAction({ serverId, cwd, diffMode });
+  const onRevertPath = useDiscardChangesAction({ serverId, cwd: activeCwd, diffMode });
   const [localFocusRequest, setLocalFocusRequest] = useState<{
     path: string;
     revision: number;
@@ -1878,7 +1921,7 @@ export function ChangesSurface({
   );
   const { gitActions, branchLabel } = useGitActions({
     serverId,
-    cwd,
+    cwd: activeCwd,
     icons: GIT_ACTION_ICONS,
   });
   const committedDiffDescription = useMemo(
@@ -1988,13 +2031,25 @@ export function ChangesSurface({
       wrapLines,
     ],
   );
+  const checkoutSwitcher = useMemo(
+    () =>
+      multiRepo
+        ? {
+            checkouts: multiRepo,
+            selectedKey: selectedCheckoutKey,
+            onSelect: onSelectCheckout,
+          }
+        : null,
+    [multiRepo, onSelectCheckout, selectedCheckoutKey],
+  );
   const changesHeaderModel = useMemo(
     () =>
       buildChangesHeaderModel({
         branchName: currentBranchName,
+        checkoutSwitcher,
         committedDescription: committedDiffDescription,
         compact: isMobile,
-        cwd,
+        cwd: activeCwd,
         diffMode,
         gitActions,
         mode: toolbarMode,
@@ -2007,9 +2062,10 @@ export function ChangesSurface({
         workspaceId,
       }),
     [
+      checkoutSwitcher,
       committedDiffDescription,
       currentBranchName,
-      cwd,
+      activeCwd,
       diffMode,
       gitActions,
       handleOpenPullRequest,
@@ -2054,7 +2110,7 @@ export function ChangesSurface({
       <ChangesCommits
         presentation={presentation}
         serverId={serverId}
-        cwd={cwd}
+        cwd={activeCwd}
         onCommitPress={handleCommitPress}
         collapsed={instanceState.commitsCollapsed}
         onCollapsedChange={handleCommitsCollapsedChange}
@@ -2082,6 +2138,15 @@ const styles = StyleSheet.create((theme) => ({
     minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
+    gap: theme.spacing[1],
+  },
+  // Fork multi-repo (#3254): stacks the repo switcher above the branch
+  // switcher in the Changes leading area.
+  changesRepoColumn: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexDirection: "column",
+    alignItems: "flex-start",
     gap: theme.spacing[1],
   },
   changesToolbarControls: {

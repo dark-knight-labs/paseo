@@ -2722,6 +2722,38 @@ export const ArchiveWorkspaceRequestSchema = z.object({
   requestId: z.string(),
 });
 
+// A secondary repository to check out alongside the main worktree when creating
+// a multi-repo workspace (discussion #3254). Each secondary gets its own
+// independent worktree + branch lifecycle: the daemon cuts one worktree per
+// entry, so repos never share a branch name.
+export const WorkspaceSecondaryWorktreeInputSchema = z.object({
+  // The secondary project whose repo the worktree is cut from.
+  cwd: z.string().optional(),
+  projectId: z.string().optional(),
+  // Base ref the new worktree branch is created from.
+  refName: z.string().min(1).optional(),
+  baseBranch: z.string().optional(),
+  // New branch name for branch-off. Defaults to a generated name.
+  branchName: z.string().min(1).optional(),
+  worktreeSlug: z.string().optional(),
+});
+
+export type WorkspaceSecondaryWorktreeInput = z.infer<typeof WorkspaceSecondaryWorktreeInputSchema>;
+
+// A secondary checkout belonging to a multi-repo workspace, persisted on the
+// workspace record and echoed on the descriptor so Changes/navbar can offer a
+// per-repo switcher.
+export const WorkspaceSecondaryCheckoutSchema = z.object({
+  projectId: z.string(),
+  displayName: z.string(),
+  repoRoot: z.string(),
+  worktreePath: z.string(),
+  branch: z.string().nullable(),
+  baseBranch: z.string().nullable(),
+});
+
+export type WorkspaceSecondaryCheckout = z.infer<typeof WorkspaceSecondaryCheckoutSchema>;
+
 // Create a new workspace record. Unlike open_project, this never deduplicates by
 // directory: it always produces a fresh workspace. The source discriminates
 // between an existing local directory and a newly created paseo worktree.
@@ -2730,6 +2762,13 @@ export const WorkspaceCreateRequestSchema = z.object({
   requestId: z.string(),
   // Optional user-set title applied to the created workspace.
   title: z.string().optional(),
+  // COMPAT(linkedRepoRoots): fork multi-repo context roots for discussion #3254.
+  // Optional so old clients keep creating workspaces unchanged; absent means none.
+  linkedRepoRoots: z.array(z.string()).optional(),
+  // COMPAT(secondaryWorktrees): fork multi-repo worktree checkouts for #3254.
+  // Only meaningful on the worktree source. Optional so old clients keep
+  // creating workspaces unchanged; absent means a single-repo workspace.
+  secondaryWorktrees: z.array(WorkspaceSecondaryWorktreeInputSchema).optional(),
   // Optional prompt context for workspace-level name/branch generation.
   firstAgentContext: FirstAgentContextSchema.optional(),
   source: z.discriminatedUnion("kind", [
@@ -4083,6 +4122,16 @@ export const WorkspaceDescriptorPayloadSchema = z
     pinnedAt: z.string().nullable().optional(),
     // COMPAT(workspaceLabels): added in v0.5.0, remove optional after 2027-08-14.
     labels: z.array(z.string()).optional(),
+    // COMPAT(linkedRepoRoots): fork multi-repo context roots for discussion #3254.
+    // Absent means the daemon predates linked context; treat as no linked roots.
+    linkedRepoRoots: z.array(z.string()).optional(),
+    // COMPAT(secondaryCheckouts): fork multi-repo worktree checkouts for #3254.
+    // Absent means the daemon predates multi-repo checkouts; treat as single-repo.
+    secondaryCheckouts: z.array(WorkspaceSecondaryCheckoutSchema).optional(),
+    // COMPAT(worktreeRoot): fork multi-repo main checkout path for #3254. The main
+    // checkout moves into the container at creation, so the slug basename no longer
+    // addresses it. Absent means single-repo (cwd is the checkout) or an old daemon.
+    worktreeRoot: z.string().optional(),
     archivingAt: z.string().nullable().optional().default(null),
     status: WorkspaceStateBucketSchema,
     // Best-effort workspace status entry timestamp. Old daemons omit the

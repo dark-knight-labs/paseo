@@ -1180,6 +1180,20 @@ export async function deletePaseoWorktree({
   }
 }
 
+/**
+ * Re-links a worktree directory that was moved on disk without `git worktree
+ * move` (e.g. staged into a multi-repo container). Without this, `git
+ * worktree list` in the main repo keeps reporting the stale pre-move path and
+ * a later `git worktree remove` targets a directory that no longer exists.
+ * Requires git >= 2.38; failures throw so callers can roll back the move.
+ */
+export async function repairMovedPaseoWorktree(worktreePath: string): Promise<void> {
+  await runGitCommand(["worktree", "repair", worktreePath], {
+    cwd: worktreePath,
+    timeout: 30_000,
+  });
+}
+
 export async function rollbackCreatedPaseoWorktree(
   options: DeletePaseoWorktreeOptions,
   cause: unknown,

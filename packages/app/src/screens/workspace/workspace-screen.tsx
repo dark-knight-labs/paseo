@@ -40,6 +40,44 @@ import { RetainedPanel } from "@/components/retained-panel";
 import { WorkspaceActions } from "@/git/workspace-actions";
 import { WorkspaceOpenInEditorButton } from "@/workspace/open-in-editor/button";
 import { WorkspaceScriptsButton } from "@/screens/workspace/workspace-scripts-button";
+import { CheckoutSwitcher } from "@/components/checkout-switcher";
+import {
+  hasMultipleCheckouts,
+  listWorkspaceCheckouts,
+  useActiveCheckout,
+  type WorkspaceCheckoutOption,
+} from "@/workspace/multi-repo-checkouts";
+
+// Fork multi-repo (#3254): navbar checkout selection bound to the descriptor.
+// Single-repo descriptors yield no switcher props and the copy path falls back
+// to the workspace directory.
+function useWorkspaceCheckoutSwitcher(
+  workspaceDescriptor: WorkspaceDescriptor | null | undefined,
+): {
+  switcherProps: {
+    checkouts: WorkspaceCheckoutOption[];
+    selectedKey: string;
+    onSelect: (key: string) => void;
+  } | null;
+  activeCheckout: WorkspaceCheckoutOption | undefined;
+} {
+  const checkouts = useMemo(
+    () => (workspaceDescriptor ? listWorkspaceCheckouts(workspaceDescriptor) : []),
+    [workspaceDescriptor],
+  );
+  const selection = useActiveCheckout({ cwd: "", checkouts });
+  if (!hasMultipleCheckouts(workspaceDescriptor)) {
+    return { switcherProps: null, activeCheckout: undefined };
+  }
+  return {
+    switcherProps: {
+      checkouts,
+      selectedKey: selection.selectedKey,
+      onSelect: selection.onSelectCheckout,
+    },
+    activeCheckout: selection.activeCheckout,
+  };
+}
 import { ImportSessionSheet } from "@/components/import-session-sheet";
 import { useToast } from "@/contexts/toast-context";
 import { getOrCreateClientId } from "@/utils/client-id";
@@ -2817,19 +2855,26 @@ function WorkspaceScreenContent({
     [client, isConnected, normalizedServerId, toast, t],
   );
 
+  // Fork multi-repo (#3254): navbar checkout selection. Local to this screen,
+  // defaults to main, resets with the workspace. Copy path copies the selected
+  // checkout; single-repo workspaces never mount the switcher and keep the
+  // workspace directory behavior verbatim.
+  const { switcherProps: checkoutSwitcherProps, activeCheckout: selectedCheckout } =
+    useWorkspaceCheckoutSwitcher(workspaceDescriptor);
   const handleCopyWorkspacePath = useCallback(async () => {
-    if (!workspaceDirectory) {
+    const copyPath = selectedCheckout?.worktreePath ?? workspaceDirectory;
+    if (!copyPath) {
       toast.error(t("workspace.header.toasts.workspacePathUnavailable"));
       return;
     }
 
     try {
-      await Clipboard.setStringAsync(workspaceDirectory);
+      await Clipboard.setStringAsync(copyPath);
       toast.copied(t("workspace.header.toasts.workspacePathCopiedLabel"));
     } catch {
       toast.error(t("workspace.tabs.toasts.copyFailed"));
     }
-  }, [toast, workspaceDirectory, t]);
+  }, [toast, workspaceDirectory, selectedCheckout, t]);
 
   const handleCopyBranchName = useCallback(async () => {
     if (!currentBranchName) {
@@ -3798,6 +3843,14 @@ function WorkspaceScreenContent({
   const headerRight = useMemo(
     () => (
       <View style={styles.headerRight}>
+        {checkoutSwitcherProps ? (
+          <CheckoutSwitcher
+            checkouts={checkoutSwitcherProps.checkouts}
+            selectedKey={checkoutSwitcherProps.selectedKey}
+            onSelect={checkoutSwitcherProps.onSelect}
+            testID="workspace-header-checkout-switcher"
+          />
+        ) : null}
         {!isMobile && workspaceDescriptor && workspaceDescriptor.scripts.length > 0 ? (
           <WorkspaceScriptsButton
             serverId={normalizedServerId}
@@ -3846,6 +3899,7 @@ function WorkspaceScreenContent({
     ),
     [
       isMobile,
+      checkoutSwitcherProps,
       workspaceDescriptor,
       normalizedServerId,
       normalizedWorkspaceId,

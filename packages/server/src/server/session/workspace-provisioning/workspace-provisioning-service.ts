@@ -34,6 +34,15 @@ export interface ImportWorkspaceResult<T> {
   createdWorkspace: PersistedWorkspaceRecord | null;
 }
 
+export interface SecondaryCheckoutInput {
+  projectId: string;
+  displayName: string;
+  repoRoot: string;
+  worktreePath: string;
+  branch: string | null;
+  baseBranch: string | null;
+}
+
 export interface CreateWorktreeWorkspaceInput {
   sourceCwd: string;
   projectId?: string;
@@ -44,6 +53,8 @@ export interface CreateWorktreeWorkspaceInput {
   baseBranch: string | null;
   title: string | null;
   expectsInitialAgent?: boolean;
+  linkedRepoRoots?: string[];
+  secondaryCheckouts?: SecondaryCheckoutInput[];
 }
 
 export interface WorkspaceProvisioningService {
@@ -57,7 +68,7 @@ export interface WorkspaceProvisioningService {
     cwd: string,
     title?: string | null,
     projectId?: string,
-    context?: { expectsInitialAgent?: boolean },
+    context?: { expectsInitialAgent?: boolean; linkedRepoRoots?: string[] },
   ): Promise<PersistedWorkspaceRecord>;
   createWorkspaceForWorktree(
     input: CreateWorktreeWorkspaceInput,
@@ -186,7 +197,7 @@ export function createWorkspaceProvisioningService(deps: {
     cwd: string,
     title?: string | null,
     projectId?: string,
-    context?: { expectsInitialAgent?: boolean },
+    context?: { expectsInitialAgent?: boolean; linkedRepoRoots?: string[] },
   ): Promise<PersistedWorkspaceRecord> {
     const normalizedCwd = resolve(cwd);
     const checkout = await workspaceGitService.getCheckout(normalizedCwd);
@@ -200,6 +211,9 @@ export function createWorkspaceProvisioningService(deps: {
       projectId: project.projectId,
       ...initialWorkspacePlacement({ source: "checkout", cwd: normalizedCwd, checkout }),
       title: title?.trim() || null,
+      ...(context?.linkedRepoRoots && context.linkedRepoRoots.length > 0
+        ? { linkedRepoRoots: context.linkedRepoRoots }
+        : {}),
       createdAt: timestamp,
       updatedAt: timestamp,
     });
@@ -232,6 +246,16 @@ export function createWorkspaceProvisioningService(deps: {
         mainRepoRoot: repoRoot,
       }),
       title: input.title,
+      ...(input.linkedRepoRoots && input.linkedRepoRoots.length > 0
+        ? { linkedRepoRoots: input.linkedRepoRoots }
+        : {}),
+      ...(input.secondaryCheckouts && input.secondaryCheckouts.length > 0
+        ? {
+            secondaryCheckouts: input.secondaryCheckouts.map((checkout) => ({
+              ...checkout,
+            })),
+          }
+        : {}),
       createdAt: timestamp,
       updatedAt: timestamp,
     });

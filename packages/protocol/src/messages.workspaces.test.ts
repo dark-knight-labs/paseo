@@ -1182,6 +1182,81 @@ describe("workspace message schemas", () => {
     expect(newDirectory.type).toBe("workspace.create.request");
     expect(newDirectory.source.kind).toBe("directory");
   });
+
+  test("workspace.create.request accepts secondary worktrees and old clients omit them", () => {
+    // Old client: no secondaryWorktrees -> parses, field absent.
+    const single = WorkspaceCreateRequestSchema.parse({
+      type: "workspace.create.request",
+      requestId: "req-single",
+      source: { kind: "worktree", cwd: "/tmp/repo" },
+    });
+    expect(single.secondaryWorktrees).toBeUndefined();
+
+    // New client: secondaries round-trip with per-repo branch inputs.
+    const multi = WorkspaceCreateRequestSchema.parse({
+      type: "workspace.create.request",
+      requestId: "req-multi",
+      source: { kind: "worktree", cwd: "/tmp/service-a" },
+      secondaryWorktrees: [
+        { cwd: "/tmp/service-b", refName: "main", branchName: "feature-b" },
+        { projectId: "proj-c", baseBranch: "develop" },
+      ],
+    });
+    expect(multi.secondaryWorktrees).toEqual([
+      { cwd: "/tmp/service-b", refName: "main", branchName: "feature-b" },
+      { projectId: "proj-c", baseBranch: "develop" },
+    ]);
+  });
+
+  test("workspace descriptor echoes secondary checkouts and old daemons omit them", () => {
+    const baseWorkspace = {
+      id: "ws-multi",
+      projectId: "proj-a",
+      projectDisplayName: "service-a",
+      projectRootPath: "/tmp/service-a",
+      projectKind: "git",
+      workspaceKind: "worktree",
+      name: "multi",
+      status: "done",
+      activityAt: null,
+      diffStat: null,
+      scripts: [],
+      gitRuntime: null,
+      githubRuntime: null,
+    };
+    // Old daemon: secondaryCheckouts omitted -> parses, field absent.
+    expect(
+      WorkspaceDescriptorPayloadSchema.parse(baseWorkspace).secondaryCheckouts,
+    ).toBeUndefined();
+    expect(WorkspaceDescriptorPayloadSchema.parse(baseWorkspace).worktreeRoot).toBeUndefined();
+
+    // New daemon: checkouts round-trip.
+    const parsed = WorkspaceDescriptorPayloadSchema.parse({
+      ...baseWorkspace,
+      worktreeRoot: "/tmp/checkouts/service-a",
+      secondaryCheckouts: [
+        {
+          projectId: "proj-b",
+          displayName: "service-b",
+          repoRoot: "/tmp/service-b",
+          worktreePath: "/tmp/checkouts/service-b",
+          branch: "feature-b",
+          baseBranch: "main",
+        },
+      ],
+    });
+    expect(parsed.worktreeRoot).toBe("/tmp/checkouts/service-a");
+    expect(parsed.secondaryCheckouts).toEqual([
+      {
+        projectId: "proj-b",
+        displayName: "service-b",
+        repoRoot: "/tmp/service-b",
+        worktreePath: "/tmp/checkouts/service-b",
+        branch: "feature-b",
+        baseBranch: "main",
+      },
+    ]);
+  });
   test("parses workspace.mark_unread.request and workspace.mark_unread.response", () => {
     const singleRequest = SessionInboundMessageSchema.parse({
       type: "workspace.mark_unread.request",
