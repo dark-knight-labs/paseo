@@ -2897,6 +2897,12 @@ export const en = {
           delete: "Delete skill",
         },
       },
+      rateLimitAutoResume: {
+        title: "Auto-resume on rate limits",
+        hint: "Automatically resume agent sessions after API rate limit cooldown or model recovery",
+        accessibilityLabel: "Auto-resume on rate limits",
+        error: "Unable to update auto-resume setting",
+      },
       orchestration: {
         title: "Orchestration",
         unavailable: "Connect to this host to manage orchestration",

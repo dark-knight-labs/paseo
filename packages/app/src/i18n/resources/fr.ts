@@ -2821,6 +2821,12 @@ export const fr: TranslationResources = {
           delete: "Supprimer le skill",
         },
       },
+      rateLimitAutoResume: {
+        title: "Reprise automatique lors des limites de débit",
+        hint: "Reprendre automatiquement les sessions d'agent après le temps de recharge du quota de l'API ou la récupération du modèle",
+        accessibilityLabel: "Reprise automatique lors des limites de débit",
+        error: "Impossible de mettre à jour le paramètre de reprise automatique",
+      },
       orchestration: {
         title: "Orchestration",
         unavailable: "Connectez-vous à cet hôte pour gérer l’orchestration",

@@ -2742,6 +2742,12 @@ export const zhCN: TranslationResources = {
           delete: "删除 skill",
         },
       },
+      rateLimitAutoResume: {
+        title: "速率限制自动恢复",
+        hint: "在 API 速率限制冷却或模型恢复后自动恢复代理会话",
+        accessibilityLabel: "速率限制自动恢复",
+        error: "无法更新自动恢复设置",
+      },
       orchestration: {
         title: "编排",
         unavailable: "连接到这个 Host 以管理编排",

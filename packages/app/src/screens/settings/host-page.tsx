@@ -902,6 +902,7 @@ function InjectPaseoToolsCard({ serverId }: { serverId: string }) {
 }
 
 function RateLimitAutoResumeCard({ serverId }: { serverId: string }) {
+  const { t } = useTranslation();
   const isConnected = useHostRuntimeIsConnected(serverId);
   const { config, patchConfig } = useDaemonConfig(serverId);
 
@@ -910,12 +911,12 @@ function RateLimitAutoResumeCard({ serverId }: { serverId: string }) {
       void patchConfig({ autoResumeOnRateLimit: next }).catch((error) => {
         console.error("[HostPage] Failed to update auto-resume on rate limits", error);
         Alert.alert(
-          "Unable to update auto-resume setting",
+          t("settings.host.rateLimitAutoResume.error", "Unable to update auto-resume setting"),
           error instanceof Error ? error.message : String(error),
         );
       });
     },
-    [patchConfig],
+    [patchConfig, t],
   );
 
   if (!isConnected) return null;
@@ -924,15 +925,23 @@ function RateLimitAutoResumeCard({ serverId }: { serverId: string }) {
     <View style={settingsStyles.card} testID="host-page-rate-limit-auto-resume-card">
       <View style={settingsStyles.row}>
         <View style={settingsStyles.rowContent}>
-          <Text style={settingsStyles.rowTitle}>Auto-resume on rate limits</Text>
+          <Text style={settingsStyles.rowTitle}>
+            {t("settings.host.rateLimitAutoResume.title", "Auto-resume on rate limits")}
+          </Text>
           <Text style={settingsStyles.rowHint}>
-            Automatically resume agent sessions after API rate limit cooldown or model recovery
+            {t(
+              "settings.host.rateLimitAutoResume.hint",
+              "Automatically resume agent sessions after API rate limit cooldown or model recovery",
+            )}
           </Text>
         </View>
         <Switch
           value={config?.autoResumeOnRateLimit !== false}
           onValueChange={handleValueChange}
-          accessibilityLabel="Auto-resume on rate limits"
+          accessibilityLabel={t(
+            "settings.host.rateLimitAutoResume.accessibilityLabel",
+            "Auto-resume on rate limits",
+          )}
           testID="host-page-rate-limit-auto-resume-switch"
         />
       </View>

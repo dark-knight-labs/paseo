@@ -12,6 +12,7 @@ import { isRateLimitAutoResumeDisabled } from "@getpaseo/protocol/agent-labels";
 
 export const DEFAULT_RATE_LIMIT_AUTO_RESUME_PROMPT = "Resume - rate limit cooldown has ended";
 export const RATE_LIMIT_AUTO_RESUME_PENDING_FILE = "pending-rate-limit-auto-resumes.json";
+export const MAX_CONSECUTIVE_AUTO_RESUMES = 10;
 
 // Matches RETRY_AFTER:YYYY-MM-DDTHH:MM:SSZ or with fractional seconds (.123Z) at the end of a message
 export const RETRY_AFTER_PATTERN =
@@ -100,7 +101,9 @@ interface ActiveTimerEntry {
 
 export interface AgentRateLimitAutoResumeManagerDependencies {
   paseoHome: string;
-  agentManager: Pick<AgentManager, "appendTimelineItem" | "getAgent">;
+  agentManager: Pick<AgentManager, "appendTimelineItem" | "getAgent"> & {
+    hasInFlightRun?: (agentId: string) => boolean;
+  };
   agentStorage: AgentStorage;
   daemonConfigStore: Pick<DaemonConfigStore, "get">;
   logger: Logger;
@@ -109,12 +112,14 @@ export interface AgentRateLimitAutoResumeManagerDependencies {
 
 export class AgentRateLimitAutoResumeManager {
   private readonly paseoHome: string;
-  private readonly agentManager: Pick<AgentManager, "appendTimelineItem" | "getAgent">;
+  private readonly agentManager: AgentRateLimitAutoResumeManagerDependencies["agentManager"];
   private readonly agentStorage: AgentStorage;
   private readonly daemonConfigStore: Pick<DaemonConfigStore, "get">;
   private readonly logger: Logger;
   private readonly send: typeof sendPromptToAgent;
   private readonly activeTimers = new Map<string, ActiveTimerEntry>();
+  private readonly agentEpochs = new Map<string, number>();
+  private readonly consecutiveResumes = new Map<string, number>();
   private persistenceChain = Promise.resolve();
 
   constructor(dependencies: AgentRateLimitAutoResumeManagerDependencies) {
@@ -124,6 +129,16 @@ export class AgentRateLimitAutoResumeManager {
     this.daemonConfigStore = dependencies.daemonConfigStore;
     this.logger = dependencies.logger;
     this.send = dependencies.sendPrompt ?? sendPromptToAgent;
+  }
+
+  private nextEpoch(agentId: string): number {
+    const next = (this.agentEpochs.get(agentId) ?? 0) + 1;
+    this.agentEpochs.set(agentId, next);
+    return next;
+  }
+
+  resetConsecutiveResumes(agentId: string): void {
+    this.consecutiveResumes.delete(agentId);
   }
 
   hasPending(agentId: string): boolean {
@@ -175,6 +190,7 @@ export class AgentRateLimitAutoResumeManager {
     }
 
     this.cancelTimerOnly(agentId);
+    const scheduledEpoch = this.nextEpoch(agentId);
     const delayMs = retryDate.getTime() - now;
     this.logger.info(
       { agentId, scheduledFor: iso, delayMs },
@@ -182,8 +198,9 @@ export class AgentRateLimitAutoResumeManager {
     );
 
     const timeout = setTimeout(() => {
-      void this.triggerResume(agentId);
+      void this.triggerResume(agentId, scheduledEpoch);
     }, delayMs);
+    timeout.unref?.();
 
     this.activeTimers.set(agentId, {
       timeout,
@@ -196,6 +213,7 @@ export class AgentRateLimitAutoResumeManager {
   }
 
   cancel(agentId: string): void {
+    this.nextEpoch(agentId);
     if (!this.activeTimers.has(agentId)) return;
     this.cancelTimerOnly(agentId);
     void this.persistActiveTimers();
@@ -207,7 +225,10 @@ export class AgentRateLimitAutoResumeManager {
       clearTimeout(entry.timeout);
     }
     this.activeTimers.clear();
-    void writePendingRateLimitRecords(this.paseoHome, [], this.logger);
+    for (const agentId of this.agentEpochs.keys()) {
+      this.nextEpoch(agentId);
+    }
+    void this.persistActiveTimers();
   }
 
   private cancelTimerOnly(agentId: string): void {
@@ -244,9 +265,17 @@ export class AgentRateLimitAutoResumeManager {
     await this.persistenceChain;
   }
 
-  async triggerResume(agentId: string): Promise<void> {
+  async triggerResume(agentId: string, expectedEpoch?: number): Promise<void> {
     this.cancelTimerOnly(agentId);
     void this.persistActiveTimers();
+
+    if (expectedEpoch !== undefined && this.agentEpochs.get(agentId) !== expectedEpoch) {
+      this.logger.debug(
+        { agentId },
+        "Rate limit auto-resume aborted: epoch moved before execution",
+      );
+      return;
+    }
 
     if (!this.isEnabledForAgent(agentId)) {
       this.logger.info(
@@ -265,6 +294,16 @@ export class AgentRateLimitAutoResumeManager {
       return;
     }
 
+    const consecutiveCount = (this.consecutiveResumes.get(agentId) ?? 0) + 1;
+    this.consecutiveResumes.set(agentId, consecutiveCount);
+    if (consecutiveCount > MAX_CONSECUTIVE_AUTO_RESUMES) {
+      this.logger.warn(
+        { agentId, consecutiveCount },
+        "Rate limit auto-resume aborted: exceeded maximum consecutive auto-resumes",
+      );
+      return;
+    }
+
     this.logger.info({ agentId }, "Executing auto-resume after rate limit cooldown");
     try {
       await ensureAgentLoaded(agentId, {
@@ -272,6 +311,22 @@ export class AgentRateLimitAutoResumeManager {
         agentStorage: this.agentStorage,
         logger: this.logger,
       });
+
+      if (expectedEpoch !== undefined && this.agentEpochs.get(agentId) !== expectedEpoch) {
+        this.logger.debug(
+          { agentId },
+          "Rate limit auto-resume aborted: epoch moved during loading",
+        );
+        return;
+      }
+
+      if (this.agentManager.hasInFlightRun?.(agentId)) {
+        this.logger.info(
+          { agentId },
+          "Rate limit auto-resume aborted: agent already has an in-flight run",
+        );
+        return;
+      }
 
       await this.agentManager.appendTimelineItem(agentId, {
         type: "resume",
@@ -334,9 +389,12 @@ export class AgentRateLimitAutoResumeManager {
           { agentId: record.agentId, scheduledFor: record.scheduledFor, delayMs },
           "Rescheduling rate limit auto-resume timer after restart",
         );
+        const scheduledEpoch = this.nextEpoch(record.agentId);
         const timeout = setTimeout(() => {
-          void this.triggerResume(record.agentId);
+          void this.triggerResume(record.agentId, scheduledEpoch);
         }, delayMs);
+        timeout.unref?.();
+
         this.activeTimers.set(record.agentId, {
           timeout,
           scheduledFor: targetDate,

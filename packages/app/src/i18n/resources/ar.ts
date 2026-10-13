@@ -2770,6 +2770,12 @@ export const ar: TranslationResources = {
           delete: "حذف المهارة",
         },
       },
+      rateLimitAutoResume: {
+        title: "الاستئناف التلقائي عند حدود المعدل",
+        hint: "استئناف جلسات الوكيل تلقائيًا بعد انتهاء فترة تهدئة حد المعدل لـ API أو استرداد النموذج",
+        accessibilityLabel: "الاستئناف التلقائي عند حدود المعدل",
+        error: "تعذر تحديث إعداد الاستئناف التلقائي",
+      },
       orchestration: {
         title: "التنسيق",
         unavailable: "اتصل بهذا المضيف لإدارة التنسيق",

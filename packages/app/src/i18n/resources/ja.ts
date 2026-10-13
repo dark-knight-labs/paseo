@@ -2795,6 +2795,12 @@ export const ja: TranslationResources = {
           delete: "スキルを削除",
         },
       },
+      rateLimitAutoResume: {
+        title: "レート制限時の自動再開",
+        hint: "APIレート制限のクールダウンやモデル復旧後にエージェントセッションを自動再開します",
+        accessibilityLabel: "レート制限時の自動再開",
+        error: "自動再開設定を更新できませんでした",
+      },
       orchestration: {
         title: "オーケストレーション",
         unavailable: "オーケストレーションを管理するにはこのホストに接続してください",

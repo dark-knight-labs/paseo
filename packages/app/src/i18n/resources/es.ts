@@ -2823,6 +2823,12 @@ export const es: TranslationResources = {
           delete: "Eliminar habilidad",
         },
       },
+      rateLimitAutoResume: {
+        title: "Reanudar automáticamente ante límites de velocidad",
+        hint: "Reanudar automáticamente las sesiones del agente tras el enfriamiento del límite de velocidad o la recuperación del modelo",
+        accessibilityLabel: "Reanudar automáticamente ante límites de velocidad",
+        error: "No se pudo actualizar el ajuste de reanudación automática",
+      },
       orchestration: {
         title: "Orquestación",
         unavailable: "Conéctese a este host para administrar la orquestación",

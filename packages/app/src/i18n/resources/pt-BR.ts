@@ -2805,6 +2805,12 @@ export const ptBR: TranslationResources = {
           delete: "Excluir skill",
         },
       },
+      rateLimitAutoResume: {
+        title: "Retomada automática em limites de taxa",
+        hint: "Retomar automaticamente sessões do agente após resfriamento do limite de taxa de API ou recuperação do modelo",
+        accessibilityLabel: "Retomada automática em limites de taxa",
+        error: "Não foi possível atualizar a configuração de retomada automática",
+      },
       orchestration: {
         title: "Orquestração",
         unavailable: "Conecte-se a este host para gerenciar a orquestração",

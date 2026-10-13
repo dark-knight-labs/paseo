@@ -746,6 +746,9 @@ function detachedAgentLabelPatch(labels: Record<string, string>): AgentLabelPatc
   return patch;
 }
 
+export const RATE_LIMIT_ERROR_HEURISTIC =
+  /(?:429|rate[_\s-]?limit|cooldown|cooling down|quota|too many requests)/i;
+
 function resolveRescueTimeouts(
   timeouts?: AgentManagerRescueTimeouts,
 ): Required<AgentManagerRescueTimeouts> {
@@ -2668,6 +2671,7 @@ export class AgentManager {
   }): Promise<string> {
     const { agent, agentId, pendingRun, prompt, options } = params;
     this.rateLimitAutoResumeManager?.cancel(agentId);
+    this.rateLimitAutoResumeManager?.resetConsecutiveResumes(agentId);
     try {
       const result = await agent.session.startTurn(prompt, options);
       if (pendingRun.settled) {
@@ -4833,7 +4837,7 @@ export class AgentManager {
     if (!this.rateLimitAutoResumeManager) return;
     try {
       const lastMessage = await this.getLastAssistantMessage(agentId);
-      if (lastMessage) {
+      if (lastMessage && RATE_LIMIT_ERROR_HEURISTIC.test(lastMessage)) {
         this.rateLimitAutoResumeManager.scheduleIfNeeded(agentId, lastMessage);
       }
     } catch (error) {

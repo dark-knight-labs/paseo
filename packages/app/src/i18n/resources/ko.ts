@@ -2781,6 +2781,12 @@ export const ko: TranslationResources = {
           delete: "스킬 삭제",
         },
       },
+      rateLimitAutoResume: {
+        title: "속도 제한 시 자동 재개",
+        hint: "API 속도 제한 쿨다운 또는 모델 복구 후 에이전트 세션을 자동으로 재개합니다",
+        accessibilityLabel: "속도 제한 시 자동 재개",
+        error: "자동 재개 설정을 업데이트할 수 없습니다",
+      },
       orchestration: {
         title: "오케스트레이션",
         unavailable: "오케스트레이션을 관리하려면 이 호스트에 연결하세요",
