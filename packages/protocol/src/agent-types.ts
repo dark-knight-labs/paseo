@@ -1,8 +1,3 @@
-export {
-  AGENT_LABEL_RATE_LIMIT_AUTO_RESUME,
-  isRateLimitAutoResumeDisabled,
-} from "./agent-labels.js";
-
 import type { AgentAttachment } from "./messages.js";
 
 export type AgentProvider = string;
