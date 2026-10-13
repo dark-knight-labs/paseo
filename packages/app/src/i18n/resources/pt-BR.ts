@@ -410,6 +410,7 @@ export const ptBR: TranslationResources = {
       completed: "Contexto compactado",
     },
     resume: {
+      rateLimitCooldown: en.message.resume.rateLimitCooldown,
       poweredOff: "Retomado após um desligamento inesperado",
       manual: "Retomado",
     },
@@ -656,6 +657,7 @@ export const ptBR: TranslationResources = {
       updateHost: "Atualize o host para usar o renderizador de terminal nativo.",
       unableToSubscribe: "Não foi possível assinar o terminal",
     },
+    agentSettings: en.workspace.agentSettings,
     tabs: {
       loading: "Carregando...",
       modified: "Alterações não salvas",
@@ -680,6 +682,7 @@ export const ptBR: TranslationResources = {
         copyAgentId: "Copiar ID do agente",
         copyTerminalId: "Copiar ID do terminal",
         copyFilePath: "Copiar caminho do arquivo",
+        agentSettings: en.workspace.tabs.menu.agentSettings,
         rename: "Renomear",
         closeAbove: "Fechar abas acima",
         closeBelow: "Fechar abas abaixo",

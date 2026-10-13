@@ -1,3 +1,8 @@
+export {
+  AGENT_LABEL_RATE_LIMIT_AUTO_RESUME,
+  isRateLimitAutoResumeDisabled,
+} from "./agent-labels.js";
+
 import type { AgentAttachment } from "./messages.js";
 
 export type AgentProvider = string;
@@ -370,7 +375,7 @@ export interface ResumeTimelineItem {
   [key: string]: unknown;
   type: "resume";
   /** Why the agent is being resumed. */
-  reason: "power_cut" | "manual";
+  reason: "power_cut" | "manual" | "rate_limit_retry";
   /** RFC3339 string of the capture time when reason is power_cut. */
   interruptedAt?: string;
 }

@@ -407,6 +407,7 @@ export const ko: TranslationResources = {
       completed: "컨텍스트가 압축되었습니다",
     },
     resume: {
+      rateLimitCooldown: en.message.resume.rateLimitCooldown,
       poweredOff: "예기치 않은 종료 후 재개됨",
       manual: "재개됨",
     },
@@ -652,6 +653,7 @@ export const ko: TranslationResources = {
       updateHost: "기본 터미널 렌더러를 사용하도록 호스트를 업데이트합니다.",
       unableToSubscribe: "터미널을 구독할 수 없습니다",
     },
+    agentSettings: en.workspace.agentSettings,
     tabs: {
       loading: "불러오는 중...",
       modified: "저장되지 않은 변경사항",
@@ -676,6 +678,7 @@ export const ko: TranslationResources = {
         copyAgentId: "에이전트 ID 복사",
         copyTerminalId: "터미널 ID 복사",
         copyFilePath: "파일 경로 복사",
+        agentSettings: en.workspace.tabs.menu.agentSettings,
         rename: "이름 변경",
         closeAbove: "위쪽 탭 닫기",
         closeBelow: "아래쪽 탭 닫기",

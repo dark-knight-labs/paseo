@@ -406,6 +406,7 @@ export const ar: TranslationResources = {
       completed: "تم ضغط السياق",
     },
     resume: {
+      rateLimitCooldown: en.message.resume.rateLimitCooldown,
       poweredOff: "تمت الاستئناف بعد إيقاف غير متوقع",
       manual: "تمت الاستئناف",
     },
@@ -651,6 +652,7 @@ export const ar: TranslationResources = {
       updateHost: "حدّث المضيف لاستخدام عارض الطرفية الأصلي.",
       unableToSubscribe: "غير قادر على الاشتراك في المحطة",
     },
+    agentSettings: en.workspace.agentSettings,
     tabs: {
       loading: "تحميل...",
       modified: "تغييرات غير محفوظة",
@@ -675,6 +677,7 @@ export const ar: TranslationResources = {
         copyAgentId: "نسخ معرف الوكيل",
         copyTerminalId: "نسخ معرف المحطة",
         copyFilePath: "Copy file path",
+        agentSettings: en.workspace.tabs.menu.agentSettings,
         rename: "إعادة تسمية",
         closeAbove: "إغلاق علامات التبويب أعلاه",
         closeBelow: "إغلاق علامات التبويب أدناه",

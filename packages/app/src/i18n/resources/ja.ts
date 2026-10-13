@@ -411,6 +411,7 @@ export const ja: TranslationResources = {
       completed: "コンテキストを圧縮しました",
     },
     resume: {
+      rateLimitCooldown: en.message.resume.rateLimitCooldown,
       poweredOff: "予期しないシャットダウン後に再開しました",
       manual: "再開しました",
     },
@@ -658,6 +659,7 @@ export const ja: TranslationResources = {
       updateHost: "ネイティブターミナルを使用するにはホストを更新してください。",
       unableToSubscribe: "ターミナルに接続できません",
     },
+    agentSettings: en.workspace.agentSettings,
     tabs: {
       loading: "読み込み中...",
       modified: "未保存の変更",
@@ -682,6 +684,7 @@ export const ja: TranslationResources = {
         copyAgentId: "エージェントIDをコピー",
         copyTerminalId: "ターミナルIDをコピー",
         copyFilePath: "ファイルパスをコピー",
+        agentSettings: en.workspace.tabs.menu.agentSettings,
         rename: "名前を変更",
         closeAbove: "上のタブを閉じる",
         closeBelow: "下のタブを閉じる",

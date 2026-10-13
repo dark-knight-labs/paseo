@@ -407,6 +407,7 @@ export const zhCN: TranslationResources = {
     },
     resume: {
       poweredOff: "意外关闭后已恢复",
+      rateLimitCooldown: "速率限制冷却后已恢复",
       manual: "已恢复",
     },
   },
@@ -651,6 +652,7 @@ export const zhCN: TranslationResources = {
       updateHost: "请更新主机以使用原生终端渲染器。",
       unableToSubscribe: "无法订阅 Terminal",
     },
+    agentSettings: en.workspace.agentSettings,
     tabs: {
       loading: "正在加载...",
       modified: "未保存的更改",
@@ -675,6 +677,7 @@ export const zhCN: TranslationResources = {
         copyAgentId: "复制 Agent ID",
         copyTerminalId: "复制 Terminal ID",
         copyFilePath: "Copy file path",
+        agentSettings: en.workspace.tabs.menu.agentSettings,
         rename: "重命名",
         closeAbove: "关闭上方标签",
         closeBelow: "关闭下方标签",

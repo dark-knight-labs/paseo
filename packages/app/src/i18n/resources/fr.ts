@@ -411,6 +411,7 @@ export const fr: TranslationResources = {
       completed: "Contexte compacté",
     },
     resume: {
+      rateLimitCooldown: en.message.resume.rateLimitCooldown,
       poweredOff: "Reprise après un arrêt inattendu",
       manual: "Reprise",
     },
@@ -657,6 +658,7 @@ export const fr: TranslationResources = {
       updateHost: "Mettez à jour l’hôte pour utiliser le rendu natif du terminal.",
       unableToSubscribe: "Impossible de s’abonner au terminal",
     },
+    agentSettings: en.workspace.agentSettings,
     tabs: {
       loading: "Chargement…",
       modified: "Modifications non enregistrées",
@@ -681,6 +683,7 @@ export const fr: TranslationResources = {
         copyAgentId: "Copier l’ID de l’agent",
         copyTerminalId: "Copier l’ID du terminal",
         copyFilePath: "Copier le chemin du fichier",
+        agentSettings: en.workspace.tabs.menu.agentSettings,
         rename: "Renommer",
         closeAbove: "Fermer les onglets au-dessus",
         closeBelow: "Fermer les onglets en dessous",
