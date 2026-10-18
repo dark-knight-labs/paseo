@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
-import { formatCooldownCountdown, formatCooldownTimeUtc } from "./use-rate-limit-cooldown";
+// @vitest-environment jsdom
+
+import { act, renderHook } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import {
+  formatCooldownCountdown,
+  formatCooldownTimeUtc,
+  isRateLimitCooldownActive,
+  useIsRateLimitCooldownActive,
+} from "./use-rate-limit-cooldown";
 
 describe("formatCooldownCountdown", () => {
   it("formats seconds", () => {
@@ -25,5 +33,59 @@ describe("formatCooldownTimeUtc", () => {
   it("formats UTC time string", () => {
     const d = new Date("2026-10-20T02:00:12.000Z");
     expect(formatCooldownTimeUtc(d)).toBe("02:00:12 UTC");
+  });
+});
+
+describe("isRateLimitCooldownActive", () => {
+  it("returns true for future cooldown and false for past or null", () => {
+    const now = new Date("2026-10-20T01:00:00.000Z").getTime();
+    expect(
+      isRateLimitCooldownActive(
+        { scheduledFor: "2026-10-20T02:00:00.000Z", retryAfter: "2026-10-20T02:00:00.000Z" },
+        now,
+      ),
+    ).toBe(true);
+
+    expect(
+      isRateLimitCooldownActive(
+        { scheduledFor: "2026-10-20T00:59:00.000Z", retryAfter: "2026-10-20T00:59:00.000Z" },
+        now,
+      ),
+    ).toBe(false);
+
+    expect(isRateLimitCooldownActive(null, now)).toBe(false);
+  });
+});
+
+describe("useIsRateLimitCooldownActive", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-20T01:50:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("flips to false when scheduledFor arrives without requiring a store change", async () => {
+    const cooldown = {
+      scheduledFor: "2026-10-20T02:00:00.000Z",
+      retryAfter: "2026-10-20T02:00:00.000Z",
+    };
+
+    const { result } = renderHook(() => useIsRateLimitCooldownActive(cooldown));
+    expect(result.current).toBe(true);
+
+    // Advance to 1 second before expiry
+    act(() => {
+      vi.advanceTimersByTime(10 * 60 * 1000 - 1000);
+    });
+    expect(result.current).toBe(true);
+
+    // Advance past expiry
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(result.current).toBe(false);
   });
 });

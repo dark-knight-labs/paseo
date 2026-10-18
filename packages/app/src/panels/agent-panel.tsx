@@ -98,10 +98,7 @@ import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-w
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { deriveSidebarStateBucket, type SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
-import {
-  isRateLimitCooldownActive,
-  useIsRateLimitCooldownActive,
-} from "@/rate-limit-cooldown/use-rate-limit-cooldown";
+import { useIsRateLimitCooldownActive } from "@/rate-limit-cooldown/use-rate-limit-cooldown";
 
 interface ChatAgentStateShape {
   serverId: string | null;
@@ -410,7 +407,7 @@ function useAgentPanelDescriptor(
   const provider = descriptorState.provider;
   const label = resolveWorkspaceAgentTabLabel(descriptorState.title);
   const icon = useProviderIcon(provider, context.serverId);
-  const isCooldown = isRateLimitCooldownActive(descriptorState.rateLimitCooldown);
+  const isCooldown = useIsRateLimitCooldownActive(descriptorState.rateLimitCooldown);
   const { subtitle, tooltip } = resolveDescriptorSubtitleAndTooltip(provider, label, isCooldown, t);
   const statusBucket = deriveDescriptorStatusBucket({
     ...descriptorState,

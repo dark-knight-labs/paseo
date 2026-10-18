@@ -13,6 +13,7 @@ const { theme, runtimeState, mockCooldown, mockCooldownWithAttempt } = vi.hoiste
       cancelRateLimitCooldown: vi.fn().mockResolvedValue(undefined),
     } as unknown as DaemonClient,
     isConnected: true,
+    supportsControls: true,
   },
   mockCooldown: {
     scheduledFor: "2026-10-20T02:00:00.000Z",
@@ -97,7 +98,7 @@ vi.mock("@/stores/session-store", () => ({
         "server-1": {
           serverInfo: {
             features: {
-              rateLimitCooldownControls: true,
+              rateLimitCooldownControls: runtimeState.supportsControls,
             },
           },
         },
@@ -152,6 +153,7 @@ describe("RateLimitCooldownBanner", () => {
     vi.stubGlobal("document", dom.window.document);
     vi.stubGlobal("HTMLElement", dom.window.HTMLElement);
 
+    runtimeState.supportsControls = true;
     container = dom.window.document.createElement("div");
     dom.window.document.body.appendChild(container);
     root = createRoot(container);
@@ -219,5 +221,19 @@ describe("RateLimitCooldownBanner", () => {
     });
 
     expect(runtimeState.client.cancelRateLimitCooldown).toHaveBeenCalledWith("agent-1");
+  });
+  it("hides action buttons when rateLimitCooldownControls is false", () => {
+    runtimeState.supportsControls = false;
+    act(() => {
+      root.render(
+        <RateLimitCooldownBanner serverId="server-1" agentId="agent-1" cooldown={mockCooldown} />,
+      );
+    });
+
+    const resumeBtn = container.querySelector('[data-testid="rate-limit-cooldown-resume-button"]');
+    expect(resumeBtn).toBeNull();
+
+    const cancelBtn = container.querySelector('[data-testid="rate-limit-cooldown-cancel-button"]');
+    expect(cancelBtn).toBeNull();
   });
 });
