@@ -2450,7 +2450,21 @@ export class Session {
     record: StoredAgentRecord,
     registeredProviderIds = new Set(this.providerSnapshotManager.listRegisteredProviderIds()),
   ): AgentSnapshotPayload {
-    return buildStoredAgentPayload(record, registeredProviderIds);
+    const pendingCooldown = this.agentManager
+      .getRateLimitAutoResumeManager()
+      ?.getPending(record.id);
+    const rateLimitCooldown = pendingCooldown
+      ? {
+          scheduledFor: pendingCooldown.scheduledFor.toISOString(),
+          retryAfter: pendingCooldown.retryAfter,
+          consecutiveResumes:
+            this.agentManager.getRateLimitAutoResumeManager()?.getConsecutiveResumes?.(record.id) ??
+            0,
+        }
+      : undefined;
+    return buildStoredAgentPayload(record, registeredProviderIds, {
+      rateLimitCooldown,
+    });
   }
 
   private isProviderVisibleToClient(provider: string): boolean {
@@ -3838,7 +3852,18 @@ export class Session {
         });
         return;
       }
-      await manager.triggerResume(agentId);
+      const result = await manager.triggerResume(agentId);
+      if (!result.resumed) {
+        this.emit({
+          type: "agent.rate_limit_cooldown.resume.response",
+          payload: {
+            requestId,
+            accepted: false,
+            error: result.reason,
+          },
+        });
+        return;
+      }
       this.emit({
         type: "agent.rate_limit_cooldown.resume.response",
         payload: {

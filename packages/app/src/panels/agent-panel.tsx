@@ -348,12 +348,14 @@ function resolveDescriptorSubtitleAndTooltip(
   provider: string,
   label: string | null,
   isCooldown: boolean,
+  t: (key: string) => string,
 ): { subtitle: string; tooltip: string } {
   const providerLabel = formatProviderLabel(provider);
   if (isCooldown) {
+    const cooldownTitle = t("rateLimitCooldown.title");
     return {
-      subtitle: "Rate limit cooldown active",
-      tooltip: `${label ?? providerLabel} · Rate limit cooldown active`,
+      subtitle: cooldownTitle,
+      tooltip: `${label ?? providerLabel} · ${cooldownTitle}`,
     };
   }
   return {
@@ -400,11 +402,12 @@ function useAgentPanelDescriptor(
       selectAgentDescriptorState(state.sessions[context.serverId], target.agentId),
     ),
   );
+  const { t } = useTranslation();
   const provider = descriptorState.provider;
   const label = resolveWorkspaceAgentTabLabel(descriptorState.title);
   const icon = useProviderIcon(provider, context.serverId);
   const isCooldown = Boolean(descriptorState.rateLimitCooldown);
-  const { subtitle, tooltip } = resolveDescriptorSubtitleAndTooltip(provider, label, isCooldown);
+  const { subtitle, tooltip } = resolveDescriptorSubtitleAndTooltip(provider, label, isCooldown, t);
   const statusBucket = deriveDescriptorStatusBucket({
     ...descriptorState,
     isCooldown,

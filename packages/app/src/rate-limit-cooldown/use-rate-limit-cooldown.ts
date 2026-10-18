@@ -74,7 +74,7 @@ export function useRateLimitCooldown(
   const formattedUtc = Number.isNaN(targetDate.getTime()) ? "" : formatCooldownTimeUtc(targetDate);
 
   return {
-    isActive: true,
+    isActive: remainingMs > 0,
     remainingMs,
     countdownText: formatCooldownCountdown(remainingMs),
     formattedUtc,

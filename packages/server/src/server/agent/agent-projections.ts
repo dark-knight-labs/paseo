@@ -1,6 +1,7 @@
 import type {
   AgentListItemPayload,
   AgentSnapshotPayload,
+  AgentRateLimitCooldownPayload,
   RecentProviderSessionDescriptorPayload,
 } from "../messages.js";
 import type { SerializableAgentConfig, StoredAgentRecord } from "./agent-storage.js";
@@ -202,6 +203,7 @@ function buildStoredPersistenceHandle(
 export function buildStoredAgentPayload(
   record: StoredAgentRecord,
   validProviders: Iterable<AgentProvider>,
+  options?: { rateLimitCooldown?: AgentRateLimitCooldownPayload | null },
 ): AgentSnapshotPayload {
   const defaultCapabilities = {
     supportsStreaming: false,
@@ -254,6 +256,7 @@ export function buildStoredAgentPayload(
     attentionTimestamp: record.attentionTimestamp ?? null,
     archivedAt: record.archivedAt ?? null,
     labels: normalizeLabels(record.labels),
+    ...(options?.rateLimitCooldown ? { rateLimitCooldown: options.rateLimitCooldown } : {}),
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
 }

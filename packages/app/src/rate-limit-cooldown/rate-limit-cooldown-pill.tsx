@@ -45,7 +45,8 @@ export const RateLimitCooldownPill = memo(function RateLimitCooldownPill({
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const { countdownText, formattedUtc, consecutiveResumes } = useRateLimitCooldown(cooldown);
+  const { isActive, countdownText, formattedUtc, consecutiveResumes } =
+    useRateLimitCooldown(cooldown);
 
   const [isResuming, setIsResuming] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -71,6 +72,10 @@ export const RateLimitCooldownPill = memo(function RateLimitCooldownPill({
       setIsCanceling(false);
     }
   }, [client, isConnected, isCanceling, isResuming, agentId, onToastError]);
+
+  if (!isActive) {
+    return null;
+  }
 
   const segments = [
     {

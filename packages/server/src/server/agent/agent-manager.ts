@@ -3961,6 +3961,48 @@ export class AgentManager {
     return { durableTimelineHasRows };
   }
 
+  private resolveManagedAgentCooldown(agentId: string): AgentRateLimitCooldownPayload | null {
+    const pending = this.rateLimitAutoResumeManager?.getPending(agentId);
+    if (!pending) return null;
+    return {
+      scheduledFor: pending.scheduledFor.toISOString(),
+      retryAfter: pending.retryAfter,
+      consecutiveResumes: this.rateLimitAutoResumeManager?.getConsecutiveResumes?.(agentId) ?? 0,
+    };
+  }
+
+  private resolveManagedAgentRegistrationOptions(
+    now: Date,
+    durableTimelineHasRows: boolean,
+    options:
+      | {
+          createdAt?: Date;
+          updatedAt?: Date;
+          lastUserMessageAt?: Date | null;
+          labels?: Record<string, string>;
+          historyPrimed?: boolean;
+          lastUsage?: AgentUsage;
+          lastError?: string;
+          attention?: AttentionState;
+          workspaceId?: string;
+          owner?: AgentOwner;
+        }
+      | undefined,
+  ) {
+    return {
+      workspaceId: options?.workspaceId,
+      owner: options?.owner,
+      createdAt: options?.createdAt ?? now,
+      updatedAt: options?.updatedAt ?? now,
+      historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
+      lastUserMessageAt: options?.lastUserMessageAt ?? null,
+      lastUsage: options?.lastUsage,
+      lastError: options?.lastError,
+      attention: resolveInitialAttention(options?.attention),
+      labels: options?.labels ?? {},
+    };
+  }
+
   private buildManagedAgentForRegister(params: {
     resolvedAgentId: string;
     session: AgentSession;
@@ -3984,19 +4026,21 @@ export class AgentManager {
       | undefined;
   }): ActiveManagedAgent {
     const { resolvedAgentId, session, config, now, durableTimelineHasRows, options } = params;
+    const rateLimitCooldown = this.resolveManagedAgentCooldown(resolvedAgentId);
+    const resolvedOpts = this.resolveManagedAgentRegistrationOptions(
+      now,
+      durableTimelineHasRows,
+      options,
+    );
     return {
       id: resolvedAgentId,
       provider: config.provider,
       cwd: config.cwd,
-      workspaceId: options?.workspaceId,
-      owner: options?.owner,
       session,
       capabilities: session.capabilities,
       config,
       runtimeInfo: undefined,
       lifecycle: "initializing",
-      createdAt: options?.createdAt ?? now,
-      updatedAt: options?.updatedAt ?? now,
       availableModes: [],
       currentModeId: null,
       pendingPermissions: new Map<string, AgentPermissionRequest>(),
@@ -4013,13 +4057,9 @@ export class AgentManager {
         options?.persistence ?? session.describePersistence(),
         config.cwd,
       ),
-      historyPrimed: options?.historyPrimed ?? durableTimelineHasRows,
-      lastUserMessageAt: options?.lastUserMessageAt ?? null,
-      lastUsage: options?.lastUsage,
-      lastError: options?.lastError,
-      attention: resolveInitialAttention(options?.attention),
+      rateLimitCooldown,
       internal: config.internal ?? false,
-      labels: options?.labels ?? {},
+      ...resolvedOpts,
     } as ActiveManagedAgent;
   }
 
@@ -4847,10 +4887,6 @@ export class AgentManager {
     if (!this.rateLimitAutoResumeManager) return;
     try {
       const candidates: (string | null | undefined)[] = [];
-      const agent = this.agents.get(agentId);
-      if (agent?.lastError) {
-        candidates.push(agent.lastError);
-      }
       const lastMessage = await this.getLastAssistantMessage(agentId);
       if (lastMessage) {
         candidates.push(lastMessage);

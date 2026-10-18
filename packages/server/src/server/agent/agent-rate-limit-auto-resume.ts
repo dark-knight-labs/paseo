@@ -15,6 +15,11 @@ export const DEFAULT_RATE_LIMIT_AUTO_RESUME_PROMPT = "Resume - rate limit cooldo
 export const RATE_LIMIT_AUTO_RESUME_PENDING_FILE = "pending-rate-limit-auto-resumes.json";
 export const MAX_CONSECUTIVE_AUTO_RESUMES = 10;
 
+export const RATE_LIMIT_ERROR_HEURISTIC =
+  /(?:429|rate[_\s-]?limit|cooldown|cooling down|quota|too many requests)/i;
+
+export type RateLimitResumeTriggerResult = { resumed: true } | { resumed: false; reason: string };
+
 // Matches RETRY_AFTER:YYYY-MM-DDTHH:MM:SSZ or with fractional seconds (.123Z)
 // Allows preceding whitespace/brackets/quotes/start, optional space after colon, and trailing boundaries.
 export const RETRY_AFTER_PATTERN =
@@ -147,6 +152,10 @@ export class AgentRateLimitAutoResumeManager {
     this.consecutiveResumes.delete(agentId);
   }
 
+  getConsecutiveResumes(agentId: string): number {
+    return this.consecutiveResumes.get(agentId) ?? 0;
+  }
+
   hasPending(agentId: string): boolean {
     return this.activeTimers.has(agentId);
   }
@@ -173,6 +182,9 @@ export class AgentRateLimitAutoResumeManager {
   }
 
   scheduleIfNeeded(agentId: string, text: string | null | undefined): boolean {
+    if (!text || !RATE_LIMIT_ERROR_HEURISTIC.test(text)) {
+      return false;
+    }
     const retryDate = extractRetryAfterTimestamp(text);
     if (!retryDate) {
       return false;
@@ -279,7 +291,10 @@ export class AgentRateLimitAutoResumeManager {
     await this.persistenceChain;
   }
 
-  async triggerResume(agentId: string, expectedEpoch?: number): Promise<void> {
+  async triggerResume(
+    agentId: string,
+    expectedEpoch?: number,
+  ): Promise<RateLimitResumeTriggerResult> {
     this.cancelTimerOnly(agentId);
     this.agentManager.setRateLimitCooldown?.(agentId, null);
     void this.persistActiveTimers();
@@ -289,7 +304,7 @@ export class AgentRateLimitAutoResumeManager {
         { agentId },
         "Rate limit auto-resume aborted: epoch moved before execution",
       );
-      return;
+      return { resumed: false, reason: "Resume superseded by another turn" };
     }
 
     if (!this.isEnabledForAgent(agentId)) {
@@ -297,16 +312,16 @@ export class AgentRateLimitAutoResumeManager {
         { agentId },
         "Rate limit auto-resume aborted: no longer enabled or agent archived",
       );
-      return;
+      return { resumed: false, reason: "Rate limit auto-resume is disabled or agent is archived" };
     }
 
     const agent = this.agentManager.getAgent(agentId);
     if (!agent || agent.lifecycle === "closed") {
-      return;
+      return { resumed: false, reason: "Agent is closed" };
     }
     const stored = await this.agentStorage.get(agentId);
     if (stored?.archivedAt) {
-      return;
+      return { resumed: false, reason: "Agent is archived" };
     }
 
     const consecutiveCount = (this.consecutiveResumes.get(agentId) ?? 0) + 1;
@@ -316,7 +331,10 @@ export class AgentRateLimitAutoResumeManager {
         { agentId, consecutiveCount },
         "Rate limit auto-resume aborted: exceeded maximum consecutive auto-resumes",
       );
-      return;
+      return {
+        resumed: false,
+        reason: `Maximum consecutive auto-resumes (${MAX_CONSECUTIVE_AUTO_RESUMES}) exceeded`,
+      };
     }
 
     this.logger.info({ agentId }, "Executing auto-resume after rate limit cooldown");
@@ -332,7 +350,7 @@ export class AgentRateLimitAutoResumeManager {
           { agentId },
           "Rate limit auto-resume aborted: epoch moved during loading",
         );
-        return;
+        return { resumed: false, reason: "Resume superseded by another turn" };
       }
 
       if (this.agentManager.hasInFlightRun?.(agentId)) {
@@ -340,7 +358,7 @@ export class AgentRateLimitAutoResumeManager {
           { agentId },
           "Rate limit auto-resume aborted: agent already has an in-flight run",
         );
-        return;
+        return { resumed: false, reason: "Agent already has an active in-flight run" };
       }
 
       await this.agentManager.appendTimelineItem(agentId, {
@@ -358,8 +376,13 @@ export class AgentRateLimitAutoResumeManager {
       });
 
       this.logger.info({ agentId }, "Rate limit auto-resume continuation dispatched successfully");
+      return { resumed: true };
     } catch (error) {
       this.logger.warn({ err: error, agentId }, "Failed to execute rate limit auto-resume");
+      return {
+        resumed: false,
+        reason: (error as Error).message || "Failed to execute resume prompt",
+      };
     }
   }
 

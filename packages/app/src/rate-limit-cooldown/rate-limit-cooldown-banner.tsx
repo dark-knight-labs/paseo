@@ -40,7 +40,8 @@ export const RateLimitCooldownBanner = memo(function RateLimitCooldownBanner({
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
-  const { countdownText, formattedUtc, consecutiveResumes } = useRateLimitCooldown(cooldown);
+  const { isActive, countdownText, formattedUtc, consecutiveResumes } =
+    useRateLimitCooldown(cooldown);
 
   const [isResuming, setIsResuming] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -66,6 +67,10 @@ export const RateLimitCooldownBanner = memo(function RateLimitCooldownBanner({
       setIsCanceling(false);
     }
   }, [client, isConnected, isCanceling, isResuming, agentId, onToastError]);
+
+  if (!isActive) {
+    return null;
+  }
 
   return (
     <View style={styles.container} testID="rate-limit-cooldown-banner">
