@@ -1,4 +1,5 @@
 import type { AgentRateLimitAutoResumeManager } from "./agent-rate-limit-auto-resume.js";
+import type { AgentRateLimitCooldownPayload } from "@getpaseo/protocol/messages";
 import { AGENT_LABEL_RATE_LIMIT_AUTO_RESUME } from "@getpaseo/protocol/agent-labels";
 import { projectTimelineRows } from "./timeline-projection.js";
 import type { PluginLifecycle } from "../plugins/lifecycle/index.js";
@@ -460,6 +461,7 @@ interface ManagedAgentBase {
   lastUsage?: AgentUsage;
   lastError?: string;
   attention: AttentionState;
+  rateLimitCooldown?: AgentRateLimitCooldownPayload | null;
   foregroundTurnWaiters: Set<ForegroundTurnWaiter>;
   finalizedForegroundTurnIds: Set<string>;
   unsubscribeSession: (() => void) | null;
@@ -843,6 +845,14 @@ export class AgentManager {
 
   getRateLimitAutoResumeManager(): AgentRateLimitAutoResumeManager | null {
     return this.rateLimitAutoResumeManager;
+  }
+
+  setRateLimitCooldown(agentId: string, cooldown: AgentRateLimitCooldownPayload | null): void {
+    const agent = this.agents.get(agentId);
+    if (agent) {
+      agent.rateLimitCooldown = cooldown;
+      this.emitState(agent);
+    }
   }
 
   registerClient(provider: AgentProvider, client: AgentClient): void {
@@ -4836,9 +4846,23 @@ export class AgentManager {
   private async checkRateLimitAutoResumeOnIdle(agentId: string): Promise<void> {
     if (!this.rateLimitAutoResumeManager) return;
     try {
+      const candidates: (string | null | undefined)[] = [];
+      const agent = this.agents.get(agentId);
+      if (agent?.lastError) {
+        candidates.push(agent.lastError);
+      }
       const lastMessage = await this.getLastAssistantMessage(agentId);
-      if (lastMessage && RATE_LIMIT_ERROR_HEURISTIC.test(lastMessage)) {
-        this.rateLimitAutoResumeManager.scheduleIfNeeded(agentId, lastMessage);
+      if (lastMessage) {
+        candidates.push(lastMessage);
+      }
+      const lastItem = await this.getLastItemFromStores(agentId);
+      if (lastItem && (lastItem.type === "error" || lastItem.type === "notification")) {
+        candidates.push(lastItem.message);
+      }
+      for (const text of candidates) {
+        if (text && this.rateLimitAutoResumeManager.scheduleIfNeeded(agentId, text)) {
+          break;
+        }
       }
     } catch (error) {
       this.logger.debug({ err: error, agentId }, "Failed to check rate limit auto resume on idle");
@@ -4865,6 +4889,7 @@ export class AgentManager {
       "agent.manager.turn.completed",
     );
     if (terminalDisposition === "stale") return;
+    this.rateLimitAutoResumeManager?.resetConsecutiveResumes(agent.id);
     if (event.usage) {
       agent.lastUsage = { ...agent.lastUsage, ...event.usage };
     }

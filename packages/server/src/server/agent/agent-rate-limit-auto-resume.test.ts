@@ -36,9 +36,10 @@ describe("extractRetryAfterTimestamp", () => {
     expect(date?.toISOString()).toBe("2026-10-13T17:30:00.000Z");
   });
 
-  it("returns null when space is after colon", () => {
+  it("extracts timestamp even when space is after colon", () => {
     const text = "RETRY_AFTER: 2026-10-13T17:30:00Z";
-    expect(extractRetryAfterTimestamp(text)).toBeNull();
+    const date = extractRetryAfterTimestamp(text);
+    expect(date?.toISOString()).toBe("2026-10-13T17:30:00.000Z");
   });
 
   it("returns null for non-UTC or malformed date", () => {
@@ -46,9 +47,15 @@ describe("extractRetryAfterTimestamp", () => {
     expect(extractRetryAfterTimestamp("RETRY_AFTER:not-a-dateZ")).toBeNull();
   });
 
-  it("returns null if RETRY_AFTER is not at the end of the text", () => {
-    const text = "RETRY_AFTER:2026-10-13T17:30:00Z please wait 5 minutes";
-    expect(extractRetryAfterTimestamp(text)).toBeNull();
+  it("extracts timestamp when RETRY_AFTER is followed by trailing punctuation or text", () => {
+    const text1 = "RETRY_AFTER:2026-10-13T17:30:00Z please wait 5 minutes";
+    expect(extractRetryAfterTimestamp(text1)?.toISOString()).toBe("2026-10-13T17:30:00.000Z");
+
+    const text2 = "cooling down (last error: RETRY_AFTER:2026-10-13T17:30:00.000Z).";
+    expect(extractRetryAfterTimestamp(text2)?.toISOString()).toBe("2026-10-13T17:30:00.000Z");
+
+    const text3 = "RETRY_AFTER:2026-10-13T17:30:00Z\n\ncode: 429";
+    expect(extractRetryAfterTimestamp(text3)?.toISOString()).toBe("2026-10-13T17:30:00.000Z");
   });
 });
 
@@ -93,9 +100,10 @@ describe("AgentRateLimitAutoResumeManager", () => {
     }));
     const sendPrompt = vi.fn().mockResolvedValue({ disposition: "turn_started" });
 
+    const setRateLimitCooldown = vi.fn();
     const manager = new AgentRateLimitAutoResumeManager({
       paseoHome: tmpDir,
-      agentManager: { appendTimelineItem, getAgent, hasInFlightRun },
+      agentManager: { appendTimelineItem, getAgent, hasInFlightRun, setRateLimitCooldown },
       agentStorage: { get: getStored } as unknown as AgentStorage,
       daemonConfigStore: {
         get: () =>
@@ -107,7 +115,7 @@ describe("AgentRateLimitAutoResumeManager", () => {
       sendPrompt,
     });
 
-    return { manager, appendTimelineItem, getAgent, sendPrompt };
+    return { manager, appendTimelineItem, getAgent, sendPrompt, setRateLimitCooldown };
   }
 
   it("schedules auto-resume and executes after delay", async () => {
@@ -319,5 +327,48 @@ describe("AgentRateLimitAutoResumeManager", () => {
     manager.scheduleIfNeeded("agent-1", `Error RETRY_AFTER:${retryTime12}`);
     await vi.advanceTimersByTimeAsync(3000);
     expect(appendTimelineItem).toHaveBeenCalledTimes(11);
+  });
+  it("notifies agentManager.setRateLimitCooldown when scheduling, canceling, and triggering", async () => {
+    const now = new Date("2026-10-13T12:00:00.000Z").getTime();
+    vi.setSystemTime(now);
+
+    const { manager, setRateLimitCooldown } = createHarness();
+    const retryTime = "2026-10-13T12:05:00.000Z";
+
+    manager.scheduleIfNeeded("agent-1", `Error RETRY_AFTER:${retryTime}`);
+    expect(setRateLimitCooldown).toHaveBeenCalledWith("agent-1", {
+      scheduledFor: retryTime,
+      retryAfter: retryTime,
+      consecutiveResumes: 0,
+    });
+
+    manager.cancel("agent-1");
+    expect(setRateLimitCooldown).toHaveBeenCalledWith("agent-1", null);
+  });
+
+  it("restores active timers into memory via restorePendingTimers", async () => {
+    const now = new Date("2026-10-13T12:00:00.000Z").getTime();
+    vi.setSystemTime(now);
+
+    const { manager, setRateLimitCooldown } = createHarness();
+    const futureTime = "2026-10-13T12:10:00.000Z";
+
+    await writePendingRateLimitRecords(tmpDir, [
+      {
+        agentId: "agent-early",
+        scheduledFor: futureTime,
+        retryAfter: futureTime,
+        createdAt: "2026-10-13T12:00:00.000Z",
+      },
+    ]);
+
+    expect(manager.hasPending("agent-early")).toBe(false);
+    await manager.restorePendingTimers();
+
+    expect(manager.hasPending("agent-early")).toBe(true);
+    expect(setRateLimitCooldown).toHaveBeenCalledWith("agent-early", {
+      scheduledFor: futureTime,
+      retryAfter: futureTime,
+    });
   });
 });

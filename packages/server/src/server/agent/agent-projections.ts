@@ -150,6 +150,10 @@ export function toAgentPayload(
     payload.lastError = agent.lastError;
   }
 
+  if (agent.rateLimitCooldown) {
+    payload.rateLimitCooldown = agent.rateLimitCooldown;
+  }
+
   // Handle attention state
   payload.requiresAttention = agent.attention.requiresAttention;
   if (agent.attention.requiresAttention) {
@@ -250,6 +254,7 @@ export function buildStoredAgentPayload(
     attentionTimestamp: record.attentionTimestamp ?? null,
     archivedAt: record.archivedAt ?? null,
     labels: normalizeLabels(record.labels),
+    rateLimitCooldown: null,
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
 }
@@ -273,6 +278,7 @@ export function toAgentListItemPayload(agent: AgentSnapshotPayload): AgentListIt
     attentionReason: agent.attentionReason ?? null,
     attentionTimestamp: agent.attentionTimestamp ?? null,
     labels: agent.labels,
+    rateLimitCooldown: agent.rateLimitCooldown ?? null,
     ...(agent.providerUnavailable ? { providerUnavailable: true } : {}),
   };
 }

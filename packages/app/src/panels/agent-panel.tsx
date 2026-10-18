@@ -96,7 +96,7 @@ import { getInitDeferred, getInitKey } from "@/utils/agent-initialization";
 import { derivePendingPermissionKey, normalizeAgentSnapshot } from "@/utils/agent-snapshots";
 import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-workspaces";
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
-import { deriveSidebarStateBucket } from "@/utils/sidebar-agent-state";
+import { deriveSidebarStateBucket, type SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
 
 interface ChatAgentStateShape {
@@ -113,6 +113,7 @@ interface ChatAgentStateShape {
   runtimeInfo?: Agent["runtimeInfo"];
   features?: Agent["features"];
   lastError?: Agent["lastError"] | null;
+  rateLimitCooldown?: Agent["rateLimitCooldown"] | null;
 }
 
 interface ChatAgentSelectedState extends ChatAgentStateShape {
@@ -149,6 +150,7 @@ const EMPTY_CHAT_AGENT_STATE: ChatAgentSelectedState = {
   archivedAt: null,
   requiresAttention: false,
   attentionReason: null,
+  rateLimitCooldown: null,
 };
 
 function selectChatAgentState(
@@ -175,6 +177,7 @@ function selectChatAgentState(
     archivedAt: agent.archivedAt ?? null,
     requiresAttention: agent.requiresAttention ?? false,
     attentionReason: agent.attentionReason ?? null,
+    rateLimitCooldown: agent.rateLimitCooldown ?? null,
   };
 }
 
@@ -199,6 +202,7 @@ function buildChatAgentFromState(
     runtimeInfo: state.runtimeInfo,
     features: state.features,
     lastError: state.lastError ?? null,
+    rateLimitCooldown: state.rateLimitCooldown ?? null,
     projectPlacement,
   };
 }
@@ -323,44 +327,96 @@ function storeFetchedAgentDetail(input: {
   return hydrated;
 }
 
+function deriveDescriptorStatusBucket(state: {
+  status: Agent["status"] | null;
+  isTurnActive: boolean;
+  pendingPermissionCount: number;
+  requiresAttention: boolean;
+  attentionReason: Agent["attentionReason"] | null;
+  isCooldown: boolean;
+}): SidebarStateBucket | null {
+  if (!state.status) return null;
+  return deriveSidebarStateBucket({
+    status: state.isTurnActive ? "running" : state.status,
+    pendingPermissionCount: state.pendingPermissionCount,
+    requiresAttention: state.requiresAttention || state.isCooldown,
+    attentionReason: state.isCooldown ? null : state.attentionReason,
+  });
+}
+
+function resolveDescriptorSubtitleAndTooltip(
+  provider: string,
+  label: string | null,
+  isCooldown: boolean,
+): { subtitle: string; tooltip: string } {
+  const providerLabel = formatProviderLabel(provider);
+  if (isCooldown) {
+    return {
+      subtitle: "Rate limit cooldown active",
+      tooltip: `${label ?? providerLabel} · Rate limit cooldown active`,
+    };
+  }
+  return {
+    subtitle: `${providerLabel} agent`,
+    tooltip: label ?? `${providerLabel} agent`,
+  };
+}
+
+function selectAgentDescriptorState(
+  session: ReturnType<typeof useSessionStore.getState>["sessions"][string] | undefined,
+  agentId: string,
+) {
+  const agent = session?.agents?.get(agentId) ?? session?.agentDetails?.get(agentId) ?? null;
+  if (!agent) {
+    return {
+      provider: "codex",
+      title: null,
+      status: null,
+      pendingPermissionCount: 0,
+      requiresAttention: false,
+      attentionReason: null,
+      isTurnActive: false,
+      rateLimitCooldown: null,
+    };
+  }
+  return {
+    provider: agent.provider,
+    title: agent.title,
+    status: agent.status,
+    pendingPermissionCount: agent.pendingPermissions.length,
+    requiresAttention: Boolean(agent.requiresAttention),
+    attentionReason: agent.attentionReason,
+    isTurnActive: selectAgentTurnPresentation(session, agentId).isActive,
+    rateLimitCooldown: agent.rateLimitCooldown ?? null,
+  };
+}
+
 function useAgentPanelDescriptor(
   target: { kind: "agent"; agentId: string },
   context: { serverId: string },
 ): PanelDescriptor {
   const descriptorState = useSessionStore(
-    useShallow((state) => {
-      const session = state.sessions[context.serverId];
-      const agent =
-        session?.agents?.get(target.agentId) ?? session?.agentDetails?.get(target.agentId) ?? null;
-      return {
-        provider: agent?.provider ?? "codex",
-        title: agent?.title ?? null,
-        status: agent?.status ?? null,
-        pendingPermissionCount: agent?.pendingPermissions.length ?? 0,
-        requiresAttention: agent?.requiresAttention ?? false,
-        attentionReason: agent?.attentionReason ?? null,
-        isTurnActive: selectAgentTurnPresentation(session, target.agentId).isActive,
-      };
-    }),
+    useShallow((state) =>
+      selectAgentDescriptorState(state.sessions[context.serverId], target.agentId),
+    ),
   );
   const provider = descriptorState.provider;
   const label = resolveWorkspaceAgentTabLabel(descriptorState.title);
   const icon = useProviderIcon(provider, context.serverId);
+  const isCooldown = Boolean(descriptorState.rateLimitCooldown);
+  const { subtitle, tooltip } = resolveDescriptorSubtitleAndTooltip(provider, label, isCooldown);
+  const statusBucket = deriveDescriptorStatusBucket({
+    ...descriptorState,
+    isCooldown,
+  });
 
   return {
     label: label ?? "",
-    subtitle: `${formatProviderLabel(provider)} agent`,
-    tooltip: label ?? `${formatProviderLabel(provider)} agent`,
+    subtitle,
+    tooltip,
     titleState: label ? "ready" : "loading",
     icon,
-    statusBucket: descriptorState.status
-      ? deriveSidebarStateBucket({
-          status: descriptorState.isTurnActive ? "running" : descriptorState.status,
-          pendingPermissionCount: descriptorState.pendingPermissionCount,
-          requiresAttention: descriptorState.requiresAttention,
-          attentionReason: descriptorState.attentionReason,
-        })
-      : null,
+    statusBucket,
   };
 }
 
@@ -1186,7 +1242,9 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       tasks,
       archiveFinishedStatus: archiveFinishedSubagents.status,
       hasPluginComposerPills,
-    }) || hasForkTracks;
+    }) ||
+    hasForkTracks ||
+    Boolean(agentState.rateLimitCooldown);
   const rawAgentInputDraft = useAgentInputDraft({
     draftKey: buildDraftStoreKey({
       serverId,
