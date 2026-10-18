@@ -820,4 +820,5 @@ A workspace directory leaves the 180s `git fetch` and the forge PR retain when i
 
 ```bash
 npx vitest run packages/server/src/server/git-remote-poll/git-remote-poll.test.ts --bail=1
+grep -q "listAgentsIncludingInternal" packages/server/src/server/bootstrap.ts
 ```

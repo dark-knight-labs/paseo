@@ -560,4 +560,71 @@ describe("git remote poll gate", () => {
     fixture.gate.stop();
     await fixture.harness.service.dispose();
   });
+
+  test("a one-hour-old clock stops fetching once it reaches 6 hours", async () => {
+    const fixture = createGate(() => Date.now());
+    const updatedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    fixture.workspaces.push({ workspaceId: "w1", cwd: QUIET_CWD, archivedAt: null });
+    fixture.records.push(
+      storedAgent({
+        id: "recent",
+        updatedAt,
+        cwd: QUIET_CWD,
+        workspaceId: "w1",
+      }),
+    );
+    fixture.harness.service.registerWorkspace({ cwd: QUIET_CWD }, vi.fn());
+    await settled();
+    await fixture.gate.start(fixture.records);
+    await vi.waitFor(() => {
+      expect(fixture.harness.runGitFetch).toHaveBeenCalledTimes(1);
+    });
+
+    await vi.advanceTimersByTimeAsync(GIT_REMOTE_POLL_QUIET_MS - 60 * 60 * 1000);
+    await settled();
+    const fetchesAtQuiet = fixture.harness.runGitFetch.mock.calls.length;
+    expect(fetchesAtQuiet).toBeGreaterThan(1);
+
+    await vi.advanceTimersByTimeAsync(180_000);
+    await settled();
+    expect(fixture.harness.runGitFetch).toHaveBeenCalledTimes(fetchesAtQuiet);
+    expect(fixture.records[0]?.updatedAt).toBe(updatedAt);
+
+    fixture.gate.stop();
+    await fixture.harness.service.dispose();
+  });
+
+  test("an open workspace keeps polling past 6 hours, and forgetClient stops it", async () => {
+    const fixture = createGate(() => Date.now());
+    fixture.workspaces.push({ workspaceId: "w1", cwd: QUIET_CWD, archivedAt: null });
+    fixture.records.push(
+      storedAgent({
+        id: "stale",
+        updatedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+        cwd: QUIET_CWD,
+        workspaceId: "w1",
+      }),
+    );
+    fixture.harness.service.registerWorkspace({ cwd: QUIET_CWD }, vi.fn());
+    await settled();
+    await fixture.gate.start(fixture.records);
+    fixture.gate.setClientOpenWorkspace("client-1", "w1");
+    await vi.waitFor(() => {
+      expect(fixture.harness.runGitFetch).toHaveBeenCalledTimes(1);
+    });
+
+    await vi.advanceTimersByTimeAsync(GIT_REMOTE_POLL_QUIET_MS);
+    await settled();
+    const fetchesWhileOpen = fixture.harness.runGitFetch.mock.calls.length;
+    expect(fetchesWhileOpen).toBeGreaterThan(1);
+
+    fixture.gate.forgetClient("client-1");
+    await settled();
+    await vi.advanceTimersByTimeAsync(180_000);
+    await settled();
+    expect(fixture.harness.runGitFetch).toHaveBeenCalledTimes(fetchesWhileOpen);
+
+    fixture.gate.stop();
+    await fixture.harness.service.dispose();
+  });
 });
