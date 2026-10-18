@@ -811,3 +811,13 @@ grep -q "autoResumeOnRateLimit" packages/protocol/src/messages.ts
 grep -q "rate_limit_retry" packages/protocol/src/agent-types.ts
 grep -q "agent-settings" packages/app/src/screens/workspace/workspace-tab-menu.ts
 ```
+
+## git-remote-poll-quiet
+
+**stop remote git fetch and PR polling after 6 quiet hours**
+
+A workspace directory leaves the 180s `git fetch` and the forge PR retain when it is archived, or when no connected client has it open and its newest non-archived agent `updatedAt` is 6 hours old or older. Exactly 6 hours is out. An open client keeps the directory in the set even when every agent clock is stale. The open workspace is `client_heartbeat.openWorkspaceId`. The focused tab is not a workspace, and a files or git tab sets neither focused id. Old clients omit the field and pin nothing. Boot reads the stored agent records, because `listAgents()` is empty until a session resumes.
+
+```bash
+npx vitest run packages/server/src/server/git-remote-poll/git-remote-poll.test.ts --bail=1
+```

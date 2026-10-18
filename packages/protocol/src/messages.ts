@@ -3124,6 +3124,10 @@ export const ClientHeartbeatMessageSchema = z.object({
   focusedAgentId: z.string().nullable(),
   // COMPAT(terminalFocusHeartbeat): added in v0.1.97, remove optional default after 2026-12-13 once old clients no longer send heartbeats without terminal focus.
   focusedTerminalId: z.string().nullable().optional().default(null),
+  // COMPAT(open-workspace-heartbeat): added on the fork, 2026-10-18.
+  // Old clients omit it and parse as null, so they claim no open workspace.
+  // Do not infer a workspace from focusedAgentId.
+  openWorkspaceId: z.string().min(1).nullable().optional().default(null),
   lastActivityAt: z.string(),
   appVisible: z.boolean(),
   appVisibilityChangedAt: z.string().optional(),
