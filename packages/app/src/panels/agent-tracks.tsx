@@ -26,6 +26,7 @@ import { openComposerChanges } from "@/workspace-tabs/open-supporting-view";
 import { openExplorerSidebarView } from "@/workspace-tabs/explorer-sidebar";
 import { shouldShowAgentTrackBar } from "@/panels/agent-tracks-visibility";
 import { RateLimitCooldownPill } from "@/rate-limit-cooldown/rate-limit-cooldown-pill";
+import { isRateLimitCooldownActive } from "@/rate-limit-cooldown/use-rate-limit-cooldown";
 
 /**
  * The pane's ambient context — workspace changes, subagents, and tasks — as a row of pills above
@@ -69,8 +70,11 @@ export const AgentTracks = memo(function AgentTracks({
   const openInSidePane = useSettings((settings) => settings.openInSidePane);
   const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
   const rateLimitCooldown = useSessionStore(
-    (state) => state.sessions[serverId]?.agents.get(agentId)?.rateLimitCooldown,
+    (state) =>
+      state.sessions[serverId]?.agents.get(agentId)?.rateLimitCooldown ??
+      state.sessions[serverId]?.agentDetails?.get(agentId)?.rateLimitCooldown,
   );
+  const isCooldownActive = isRateLimitCooldownActive(rateLimitCooldown);
   const canDetachSubagents = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.agentDetach === true,
   );
@@ -147,7 +151,7 @@ export const AgentTracks = memo(function AgentTracks({
       }),
       hasWorkspaceDiffStat,
       hasWorkspaceTodos,
-      hasExtraPills: hasExtraPills || Boolean(rateLimitCooldown),
+      hasExtraPills: hasExtraPills || isCooldownActive,
     })
   ) {
     return null;
@@ -155,7 +159,7 @@ export const AgentTracks = memo(function AgentTracks({
 
   return (
     <ComposerTrackBar>
-      {rateLimitCooldown ? (
+      {isCooldownActive && rateLimitCooldown ? (
         <RateLimitCooldownPill serverId={serverId} agentId={agentId} cooldown={rateLimitCooldown} />
       ) : null}
       <AgentTaskList tasks={tasks} />

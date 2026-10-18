@@ -748,9 +748,6 @@ function detachedAgentLabelPatch(labels: Record<string, string>): AgentLabelPatc
   return patch;
 }
 
-export const RATE_LIMIT_ERROR_HEURISTIC =
-  /(?:429|rate[_\s-]?limit|cooldown|cooling down|quota|too many requests)/i;
-
 function resolveRescueTimeouts(
   timeouts?: AgentManagerRescueTimeouts,
 ): Required<AgentManagerRescueTimeouts> {
