@@ -254,7 +254,6 @@ export function buildStoredAgentPayload(
     attentionTimestamp: record.attentionTimestamp ?? null,
     archivedAt: record.archivedAt ?? null,
     labels: normalizeLabels(record.labels),
-    rateLimitCooldown: null,
     ...(providerAvailable ? {} : { providerUnavailable: true }),
   };
 }
@@ -278,7 +277,7 @@ export function toAgentListItemPayload(agent: AgentSnapshotPayload): AgentListIt
     attentionReason: agent.attentionReason ?? null,
     attentionTimestamp: agent.attentionTimestamp ?? null,
     labels: agent.labels,
-    rateLimitCooldown: agent.rateLimitCooldown ?? null,
+    ...(agent.rateLimitCooldown ? { rateLimitCooldown: agent.rateLimitCooldown } : {}),
     ...(agent.providerUnavailable ? { providerUnavailable: true } : {}),
   };
 }
