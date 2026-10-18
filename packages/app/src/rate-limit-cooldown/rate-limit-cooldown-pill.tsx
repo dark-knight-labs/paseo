@@ -6,6 +6,7 @@ import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { AgentRateLimitCooldownPayload } from "@getpaseo/protocol/messages";
 import { ComposerTrackPill } from "@/composer/tracks";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
 import { Button } from "@/components/ui/button";
 import type { Theme } from "@/styles/theme";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -45,6 +46,9 @@ export const RateLimitCooldownPill = memo(function RateLimitCooldownPill({
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
+  const supportsControls = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.rateLimitCooldownControls === true,
+  );
   const { isActive, countdownText, formattedUtc, consecutiveResumes } =
     useRateLimitCooldown(cooldown);
 
@@ -104,30 +108,32 @@ export const RateLimitCooldownPill = memo(function RateLimitCooldownPill({
             </Text>
           ) : null}
         </View>
-        <View style={styles.actionsRow}>
-          <Button
-            size="sm"
-            variant="secondary"
-            testID="rate-limit-pill-resume-button"
-            onPress={handleResume}
-            loading={isResuming}
-            disabled={!isConnected || isCanceling}
-            leftIcon={PlayIcon}
-          >
-            {t("rateLimitCooldown.resumeNow")}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            testID="rate-limit-pill-cancel-button"
-            onPress={handleCancel}
-            loading={isCanceling}
-            disabled={!isConnected || isResuming}
-            leftIcon={CancelIcon}
-          >
-            {t("rateLimitCooldown.cancel")}
-          </Button>
-        </View>
+        {supportsControls ? (
+          <View style={styles.actionsRow}>
+            <Button
+              size="sm"
+              variant="secondary"
+              testID="rate-limit-pill-resume-button"
+              onPress={handleResume}
+              loading={isResuming}
+              disabled={!isConnected || isCanceling}
+              leftIcon={PlayIcon}
+            >
+              {t("rateLimitCooldown.resumeNow")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              testID="rate-limit-pill-cancel-button"
+              onPress={handleCancel}
+              loading={isCanceling}
+              disabled={!isConnected || isResuming}
+              leftIcon={CancelIcon}
+            >
+              {t("rateLimitCooldown.cancel")}
+            </Button>
+          </View>
+        ) : null}
       </View>
     </ComposerTrackPill>
   );

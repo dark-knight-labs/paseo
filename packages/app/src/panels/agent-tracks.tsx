@@ -26,7 +26,7 @@ import { openComposerChanges } from "@/workspace-tabs/open-supporting-view";
 import { openExplorerSidebarView } from "@/workspace-tabs/explorer-sidebar";
 import { shouldShowAgentTrackBar } from "@/panels/agent-tracks-visibility";
 import { RateLimitCooldownPill } from "@/rate-limit-cooldown/rate-limit-cooldown-pill";
-import { isRateLimitCooldownActive } from "@/rate-limit-cooldown/use-rate-limit-cooldown";
+import { useIsRateLimitCooldownActive } from "@/rate-limit-cooldown/use-rate-limit-cooldown";
 
 /**
  * The pane's ambient context — workspace changes, subagents, and tasks — as a row of pills above
@@ -69,12 +69,12 @@ export const AgentTracks = memo(function AgentTracks({
   const canSplit = supportsDesktopPaneSplits() && !isCompact;
   const openInSidePane = useSettings((settings) => settings.openInSidePane);
   const workspaceKey = buildWorkspaceTabPersistenceKey({ serverId, workspaceId });
-  const rateLimitCooldown = useSessionStore(
-    (state) =>
-      state.sessions[serverId]?.agents.get(agentId)?.rateLimitCooldown ??
-      state.sessions[serverId]?.agentDetails?.get(agentId)?.rateLimitCooldown,
-  );
-  const isCooldownActive = isRateLimitCooldownActive(rateLimitCooldown);
+  const rateLimitCooldown = useSessionStore((state) => {
+    const session = state.sessions[serverId];
+    const agent = session?.agents?.get(agentId) ?? session?.agentDetails?.get(agentId);
+    return agent?.rateLimitCooldown ?? null;
+  });
+  const isCooldownActive = useIsRateLimitCooldownActive(rateLimitCooldown);
   const canDetachSubagents = useSessionStore(
     (state) => state.sessions[serverId]?.serverInfo?.features?.agentDetach === true,
   );

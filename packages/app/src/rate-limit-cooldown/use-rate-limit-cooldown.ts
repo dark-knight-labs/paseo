@@ -1,6 +1,36 @@
 import { useEffect, useState } from "react";
 import type { AgentRateLimitCooldownPayload } from "@getpaseo/protocol/messages";
 
+export function useIsRateLimitCooldownActive(
+  cooldown: AgentRateLimitCooldownPayload | null | undefined,
+): boolean {
+  const [isActive, setIsActive] = useState(() => isRateLimitCooldownActive(cooldown));
+
+  useEffect(() => {
+    if (!cooldown?.scheduledFor) {
+      setIsActive(false);
+      return;
+    }
+    const targetMs = new Date(cooldown.scheduledFor).getTime();
+    if (Number.isNaN(targetMs)) {
+      setIsActive(false);
+      return;
+    }
+    const diff = targetMs - Date.now();
+    if (diff <= 0) {
+      setIsActive(false);
+      return;
+    }
+    setIsActive(true);
+    const timeout = setTimeout(() => {
+      setIsActive(false);
+    }, diff);
+    return () => clearTimeout(timeout);
+  }, [cooldown?.scheduledFor]);
+
+  return isActive;
+}
+
 export function isRateLimitCooldownActive(
   cooldown: AgentRateLimitCooldownPayload | null | undefined,
   now = Date.now(),

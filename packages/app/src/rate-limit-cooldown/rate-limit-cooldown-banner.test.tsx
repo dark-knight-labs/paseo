@@ -90,6 +90,21 @@ vi.mock("lucide-react-native", async () => {
   };
 });
 
+vi.mock("@/stores/session-store", () => ({
+  useSessionStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      sessions: {
+        "server-1": {
+          serverInfo: {
+            features: {
+              rateLimitCooldownControls: true,
+            },
+          },
+        },
+      },
+    }),
+}));
+
 vi.mock("@/runtime/host-runtime", () => ({
   useHostRuntimeClient: () => runtimeState.client,
   useHostRuntimeIsConnected: () => runtimeState.isConnected,

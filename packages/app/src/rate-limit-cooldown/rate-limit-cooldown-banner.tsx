@@ -5,6 +5,7 @@ import { CalendarClock, Play, XCircle } from "lucide-react-native";
 import { StyleSheet, withUnistyles } from "react-native-unistyles";
 import type { AgentRateLimitCooldownPayload } from "@getpaseo/protocol/messages";
 import { useHostRuntimeClient, useHostRuntimeIsConnected } from "@/runtime/host-runtime";
+import { useSessionStore } from "@/stores/session-store";
 import { Button } from "@/components/ui/button";
 import type { Theme } from "@/styles/theme";
 import { toErrorMessage } from "@/utils/error-messages";
@@ -40,6 +41,9 @@ export const RateLimitCooldownBanner = memo(function RateLimitCooldownBanner({
   const { t } = useTranslation();
   const client = useHostRuntimeClient(serverId);
   const isConnected = useHostRuntimeIsConnected(serverId);
+  const supportsControls = useSessionStore(
+    (state) => state.sessions[serverId]?.serverInfo?.features?.rateLimitCooldownControls === true,
+  );
   const { isActive, countdownText, formattedUtc, consecutiveResumes } =
     useRateLimitCooldown(cooldown);
 
@@ -93,30 +97,32 @@ export const RateLimitCooldownBanner = memo(function RateLimitCooldownBanner({
           })}
         </Text>
       </View>
-      <View style={styles.actions}>
-        <Button
-          size="sm"
-          variant="secondary"
-          testID="rate-limit-cooldown-resume-button"
-          onPress={handleResumeNow}
-          loading={isResuming}
-          disabled={!isConnected || isCanceling}
-          leftIcon={PlayIcon}
-        >
-          {t("rateLimitCooldown.resumeNow")}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          testID="rate-limit-cooldown-cancel-button"
-          onPress={handleCancel}
-          loading={isCanceling}
-          disabled={!isConnected || isResuming}
-          leftIcon={CancelIcon}
-        >
-          {t("rateLimitCooldown.cancel")}
-        </Button>
-      </View>
+      {supportsControls ? (
+        <View style={styles.actions}>
+          <Button
+            size="sm"
+            variant="secondary"
+            testID="rate-limit-cooldown-resume-button"
+            onPress={handleResumeNow}
+            loading={isResuming}
+            disabled={!isConnected || isCanceling}
+            leftIcon={PlayIcon}
+          >
+            {t("rateLimitCooldown.resumeNow")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            testID="rate-limit-cooldown-cancel-button"
+            onPress={handleCancel}
+            loading={isCanceling}
+            disabled={!isConnected || isResuming}
+            leftIcon={CancelIcon}
+          >
+            {t("rateLimitCooldown.cancel")}
+          </Button>
+        </View>
+      ) : null}
     </View>
   );
 });

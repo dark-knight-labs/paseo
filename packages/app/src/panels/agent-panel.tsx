@@ -98,7 +98,10 @@ import { applyLegacyDaemonWorkspaceOwnership } from "@/workspace/legacy-daemon-w
 import type { WorkspaceFileOpenRequest } from "@/workspace/file-open";
 import { deriveSidebarStateBucket, type SidebarStateBucket } from "@/utils/sidebar-agent-state";
 import { buildDraftAgentSetup, type ClientSlashCommand } from "@/client-slash-commands";
-import { isRateLimitCooldownActive } from "@/rate-limit-cooldown/use-rate-limit-cooldown";
+import {
+  isRateLimitCooldownActive,
+  useIsRateLimitCooldownActive,
+} from "@/rate-limit-cooldown/use-rate-limit-cooldown";
 
 interface ChatAgentStateShape {
   serverId: string | null;
@@ -407,7 +410,7 @@ function useAgentPanelDescriptor(
   const provider = descriptorState.provider;
   const label = resolveWorkspaceAgentTabLabel(descriptorState.title);
   const icon = useProviderIcon(provider, context.serverId);
-  const isCooldown = Boolean(descriptorState.rateLimitCooldown);
+  const isCooldown = isRateLimitCooldownActive(descriptorState.rateLimitCooldown);
   const { subtitle, tooltip } = resolveDescriptorSubtitleAndTooltip(provider, label, isCooldown, t);
   const statusBucket = deriveDescriptorStatusBucket({
     ...descriptorState,
@@ -1240,6 +1243,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
   const hasPluginComposerPills = useHasPluginComposerPills(serverId, workspaceId, agentId);
   const hasActiveComposer = !agentState.archivedAt && !isArchivingCurrentAgent;
   const hasForkTracks = useForkAgentTrackPresence({ serverId, agentId });
+  const isCooldownActive = useIsRateLimitCooldownActive(agentState.rateLimitCooldown);
   const hasVisibleAgentTracks =
     hasAgentTracks({
       subagentRows,
@@ -1248,7 +1252,7 @@ const ChatAgentReadyContent = memo(function ChatAgentReadyContent({
       hasPluginComposerPills,
     }) ||
     hasForkTracks ||
-    isRateLimitCooldownActive(agentState.rateLimitCooldown);
+    isCooldownActive;
   const rawAgentInputDraft = useAgentInputDraft({
     draftKey: buildDraftStoreKey({
       serverId,
