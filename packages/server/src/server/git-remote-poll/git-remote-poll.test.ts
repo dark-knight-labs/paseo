@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { ForgeService } from "../../services/forge-service.js";
 import { defaultForgeRegistry } from "../../services/forge-registry.js";
 import type { CheckoutSnapshotFacts, CheckoutStatusGit } from "../../utils/checkout-git.js";
+import type { StoredAgentRecord } from "../agent/agent-storage.js";
 import { WorkspaceGitServiceImpl } from "../workspace-git-service.js";
+import { createGitRemotePollGate, type GitRemotePollGate } from "./git-remote-poll-gate.js";
 import {
   GIT_REMOTE_POLL_QUIET_MS,
   nextRemotePollQuietDeadlineMs,
@@ -334,5 +336,228 @@ describe("remote poll arming", () => {
     } finally {
       await harness.service.dispose();
     }
+  });
+});
+
+interface WorkspaceRow {
+  workspaceId: string;
+  cwd: string;
+  archivedAt: string | null;
+}
+
+interface LiveAgent {
+  id: string;
+  cwd: string;
+  workspaceId?: string;
+  updatedAt: Date;
+}
+
+function storedAgent(fields: {
+  id: string;
+  updatedAt: string;
+  cwd: string;
+  workspaceId?: string;
+  archivedAt?: string | null;
+}): StoredAgentRecord {
+  return {
+    id: fields.id,
+    provider: "claude",
+    cwd: fields.cwd,
+    workspaceId: fields.workspaceId,
+    createdAt: fields.updatedAt,
+    updatedAt: fields.updatedAt,
+    labels: {},
+    lastStatus: "idle",
+    archivedAt: fields.archivedAt ?? null,
+  } as StoredAgentRecord;
+}
+
+function createGate(now: () => number): {
+  harness: PollHarness;
+  gate: GitRemotePollGate;
+  workspaces: WorkspaceRow[];
+  records: StoredAgentRecord[];
+  agents: LiveAgent[];
+  emit: (agent: LiveAgent) => void;
+  applyCount: () => number;
+} {
+  const harness = createPollHarness();
+  let applyCount = 0;
+  const applyRemotePoll = harness.service.applyRemotePoll.bind(harness.service);
+  harness.service.applyRemotePoll = (cwds) => {
+    applyCount += 1;
+    applyRemotePoll(cwds);
+  };
+  const workspaces: WorkspaceRow[] = [];
+  const records: StoredAgentRecord[] = [];
+  const agents: LiveAgent[] = [];
+  const listeners: Array<(event: { type: "agent_state"; agent: LiveAgent }) => void> = [];
+  const gate = createGitRemotePollGate({
+    workspaceGitService: harness.service,
+    workspaceRegistry: {
+      list: async () => workspaces,
+      subscribeToMutations: () => () => {},
+    },
+    agentStorage: { list: async () => records },
+    agentManager: {
+      listAgents: () => agents,
+      subscribe: (callback) => {
+        listeners.push(callback);
+        return () => {
+          const index = listeners.indexOf(callback);
+          if (index >= 0) listeners.splice(index, 1);
+        };
+      },
+    },
+    now,
+    logger: createLogger() as never,
+  });
+  return {
+    harness,
+    gate,
+    workspaces,
+    records,
+    agents,
+    emit: (agent) => {
+      for (const listener of listeners) listener({ type: "agent_state", agent });
+    },
+    applyCount: () => applyCount,
+  };
+}
+
+describe("git remote poll gate", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("start fetches a stored updatedAt one hour old and skips seven hours, without writing the test clock into the record", async () => {
+    const recent = createGate(() => Date.now());
+    const recentUpdatedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const recentRecord = storedAgent({
+      id: "recent",
+      updatedAt: recentUpdatedAt,
+      cwd: path.join(QUIET_CWD, "packages"),
+      workspaceId: "w1",
+    });
+    recent.workspaces.push({ workspaceId: "w1", cwd: QUIET_CWD, archivedAt: null });
+    recent.records.push(recentRecord);
+    recent.harness.service.registerWorkspace({ cwd: QUIET_CWD }, vi.fn());
+    await settled();
+    expect(recent.harness.runGitFetch).not.toHaveBeenCalled();
+
+    await recent.gate.start(recent.records);
+    await vi.waitFor(() => {
+      expect(recent.harness.runGitFetch).toHaveBeenCalledTimes(1);
+    });
+    expect(recentRecord.updatedAt).toBe(recentUpdatedAt);
+    recent.gate.stop();
+    await recent.harness.service.dispose();
+
+    const stale = createGate(() => Date.now());
+    const staleUpdatedAt = new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString();
+    const staleRecord = storedAgent({
+      id: "stale",
+      updatedAt: staleUpdatedAt,
+      cwd: QUIET_CWD,
+      workspaceId: "w1",
+    });
+    stale.workspaces.push({ workspaceId: "w1", cwd: QUIET_CWD, archivedAt: null });
+    stale.records.push(staleRecord);
+    stale.harness.service.registerWorkspace({ cwd: QUIET_CWD }, vi.fn());
+    await settled();
+    await stale.gate.start(stale.records);
+    await settled();
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(stale.harness.runGitFetch).not.toHaveBeenCalled();
+    expect(staleRecord.updatedAt).toBe(staleUpdatedAt);
+    stale.gate.stop();
+    await stale.harness.service.dispose();
+  });
+
+  test("an open directory with a stale agent is fetched, and an archived workspace is not even when a client reports it open", async () => {
+    const open = createGate(() => Date.now());
+    open.workspaces.push({ workspaceId: "w1", cwd: QUIET_CWD, archivedAt: null });
+    open.records.push(
+      storedAgent({
+        id: "stale",
+        updatedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+        cwd: QUIET_CWD,
+        workspaceId: "w1",
+      }),
+    );
+    open.harness.service.registerWorkspace({ cwd: QUIET_CWD }, vi.fn());
+    await settled();
+    await open.gate.start(open.records);
+    open.gate.setClientOpenWorkspace("client-1", "w1");
+    await vi.waitFor(() => {
+      expect(open.harness.runGitFetch).toHaveBeenCalledTimes(1);
+    });
+    open.gate.stop();
+    await open.harness.service.dispose();
+
+    const archived = createGate(() => Date.now());
+    archived.workspaces.push({
+      workspaceId: "w1",
+      cwd: QUIET_CWD,
+      archivedAt: "2026-06-01T00:00:00.000Z",
+    });
+    archived.harness.service.registerWorkspace({ cwd: QUIET_CWD }, vi.fn());
+    await settled();
+    await archived.gate.start(archived.records);
+    archived.gate.setClientOpenWorkspace("client-1", "w1");
+    await settled();
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(archived.harness.runGitFetch).not.toHaveBeenCalled();
+    archived.gate.stop();
+    await archived.harness.service.dispose();
+  });
+
+  test("a prompt on a quiet directory fetches without waiting 180s, and a second heartbeat with the same workspace does not apply again", async () => {
+    const fixture = createGate(() => Date.now());
+    fixture.workspaces.push({ workspaceId: "w1", cwd: QUIET_CWD, archivedAt: null });
+    fixture.records.push(
+      storedAgent({
+        id: "quiet",
+        updatedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+        cwd: path.join(QUIET_CWD, "packages"),
+        workspaceId: "w1",
+      }),
+    );
+    fixture.harness.service.registerWorkspace({ cwd: QUIET_CWD }, vi.fn());
+    await settled();
+    await fixture.gate.start(fixture.records);
+    await settled();
+    expect(fixture.harness.runGitFetch).not.toHaveBeenCalled();
+
+    const appliesAfterStart = fixture.applyCount();
+    fixture.gate.setClientOpenWorkspace("client-1", "missing");
+    fixture.gate.setClientOpenWorkspace("client-1", "missing");
+    expect(fixture.applyCount()).toBe(appliesAfterStart + 1);
+    expect(fixture.harness.runGitFetch).not.toHaveBeenCalled();
+
+    fixture.agents.push({
+      id: "quiet",
+      cwd: path.join(QUIET_CWD, "packages"),
+      workspaceId: "w1",
+      updatedAt: new Date(Date.now()),
+    });
+    fixture.emit(fixture.agents[0]!);
+    await vi.waitFor(() => {
+      expect(fixture.harness.runGitFetch).toHaveBeenCalledTimes(1);
+    });
+
+    const appliesAfterPrompt = fixture.applyCount();
+    fixture.emit({
+      ...fixture.agents[0]!,
+      updatedAt: new Date(Date.now() + 1),
+    });
+    expect(fixture.applyCount()).toBe(appliesAfterPrompt);
+    fixture.gate.stop();
+    await fixture.harness.service.dispose();
   });
 });
