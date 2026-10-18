@@ -52,6 +52,17 @@ application/pdf files persist as preview media like images and FilePreviewBody m
 npx vitest run packages/app/src/file-explorer/pdf.test.ts --bail=1 -t "persists images and PDFs"
 ```
 
+## office-file-preview
+
+**render Word, Excel, and PowerPoint in the file pane on web**
+
+The daemon labels the Open XML extensions with their media types, and the pane renders those files from the same blob URL as a PDF. A daemon that still sends application/octet-stream is recognized by extension. Phone builds keep the binary-unavailable message. Legacy .doc and .ppt stay unavailable.
+
+```bash
+npx vitest run packages/app/src/file-explorer/office.test.ts packages/app/src/file-explorer/pdf.test.ts --bail=1
+npx vitest run --config packages/server/vitest.config.ts packages/server/src/server/file-explorer/service.test.ts --bail=1 -t "advertises Office document types"
+```
+
 ## attention-window-focus
 
 **heartbeat appVisible follows window focus, not document visibility**
