@@ -2451,15 +2451,16 @@ export class Session {
     registeredProviderIds = new Set(this.providerSnapshotManager.listRegisteredProviderIds()),
   ): AgentSnapshotPayload {
     const pendingCooldown = this.agentManager
-      .getRateLimitAutoResumeManager()
+      .getRateLimitAutoResumeManager?.()
       ?.getPending(record.id);
     const rateLimitCooldown = pendingCooldown
       ? {
           scheduledFor: pendingCooldown.scheduledFor.toISOString(),
           retryAfter: pendingCooldown.retryAfter,
           consecutiveResumes:
-            this.agentManager.getRateLimitAutoResumeManager()?.getConsecutiveResumes?.(record.id) ??
-            0,
+            this.agentManager
+              .getRateLimitAutoResumeManager?.()
+              ?.getConsecutiveResumes?.(record.id) ?? 0,
         }
       : undefined;
     return buildStoredAgentPayload(record, registeredProviderIds, {
