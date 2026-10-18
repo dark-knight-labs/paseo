@@ -283,6 +283,7 @@ function createFallbackWorkspaceGitService(): WorkspaceGitService {
     }),
     scheduleRefreshForCwd: () => {},
     onWorkspaceStateMayHaveChanged: () => {},
+    applyRemotePoll: () => {},
     invalidateForge: () => {},
     getMetrics: () => ({
       workspaceTargetCount: 0,

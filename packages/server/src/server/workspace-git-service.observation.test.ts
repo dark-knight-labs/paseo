@@ -200,13 +200,14 @@ function createService(
 ) {
   const defaultGetCheckoutStatus = vi.fn(async (cwd: string) => createCheckoutStatus(cwd));
   const defaultGetCheckoutShortstat = vi.fn(async () => null);
+  const { admitCwds: admitCwdsOption, ...serviceOverrides } = overrides ?? {};
   const getCheckoutStatus =
-    (overrides?.getCheckoutStatus as typeof defaultGetCheckoutStatus | undefined) ??
+    (serviceOverrides.getCheckoutStatus as typeof defaultGetCheckoutStatus | undefined) ??
     defaultGetCheckoutStatus;
   const getCheckoutShortstat =
-    (overrides?.getCheckoutShortstat as typeof defaultGetCheckoutShortstat | undefined) ??
+    (serviceOverrides.getCheckoutShortstat as typeof defaultGetCheckoutShortstat | undefined) ??
     defaultGetCheckoutShortstat;
-  return new WorkspaceGitServiceImpl({
+  const service = new WorkspaceGitServiceImpl({
     logger,
     paseoHome: "/tmp/paseo-home",
     fileObserver,
@@ -243,9 +244,17 @@ function createService(
         filterEvents: (events) => events,
         verify: vi.fn(async () => {}),
       })),
-      ...overrides,
+      ...serviceOverrides,
     } as never,
   });
+  const admitCwds = [
+    REPO_CWD,
+    WORKTREE_A,
+    WORKTREE_B,
+    ...(Array.isArray(admitCwdsOption) ? admitCwdsOption.map(String) : []),
+  ];
+  service.applyRemotePoll(new Set(admitCwds));
+  return service;
 }
 
 async function flushPromises(): Promise<void> {
@@ -1462,6 +1471,7 @@ describe("WorkspaceGitService checkout observation", () => {
       getCheckoutStatus,
       runGitCommand,
       runGitFetch,
+      admitCwds: worktrees,
     });
     const subscriptions = worktrees.map((cwd) => service.registerWorkspace({ cwd }, vi.fn()));
 

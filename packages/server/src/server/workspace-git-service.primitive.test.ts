@@ -406,11 +406,13 @@ function buildServiceDeps(options?: CreateServiceOptions) {
 }
 
 function createService(options?: CreateServiceOptions) {
-  return new WorkspaceGitServiceImpl({
+  const service = new WorkspaceGitServiceImpl({
     logger: createLogger() as never,
     paseoHome: "/tmp/paseo-test",
     deps: buildServiceDeps(options),
   });
+  service.applyRemotePoll(new Set([REPO_CWD]));
+  return service;
 }
 
 describe("WorkspaceGitServiceImpl primitive refresh entrypoint", () => {
