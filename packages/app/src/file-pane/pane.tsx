@@ -140,9 +140,7 @@ function BinaryFilePreview({
 }) {
   const { t } = useTranslation();
   const label = getFileNameFromPath(preview.path) ?? preview.path;
-  const officeKind = isWeb
-    ? officePreviewKind({ mimeType: preview.mimeType, path: preview.path })
-    : null;
+  const officeKind = officePreviewKind({ mimeType: preview.mimeType, path: preview.path });
   const renderable = isPdfMimeType(preview.mimeType) || officeKind !== null;
 
   if (!renderable) {

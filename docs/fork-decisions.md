@@ -54,9 +54,9 @@ npx vitest run packages/app/src/file-explorer/pdf.test.ts --bail=1 -t "persists 
 
 ## office-file-preview
 
-**render Word, Excel, and PowerPoint in the file pane on web**
+**render Word, Excel, and PowerPoint in the file pane**
 
-The daemon labels the Open XML extensions with their media types, and the pane renders those files from the same blob URL as a PDF. A daemon that still sends application/octet-stream is recognized by extension. Phone builds keep the binary-unavailable message. Legacy .doc and .ppt stay unavailable.
+The daemon labels the Open XML extensions with their media types, and the pane renders those files on every platform. Web paints into the page. Phone builds load the same renderers in a WebView, one document per format, the way the terminal hosts its browser library. A daemon that still sends application/octet-stream is recognized by extension. Legacy .doc and .ppt stay unavailable.
 
 ```bash
 npx vitest run packages/app/src/file-explorer/office.test.ts packages/app/src/file-explorer/pdf.test.ts --bail=1
