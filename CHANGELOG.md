@@ -1,10 +1,10 @@
 # Changelog
 
-## 0.11.906 - 2026-10-19
+## 0.11.907 - 2026-10-19
 
 ### Changed
 
-- Stopped the 3-minute git fetch and the forge pull-request poll for a workspace with no agent activity for 6 hours. Opening that workspace, or the next prompt, starts them again. File watching is unchanged, so a commit made outside Paseo still updates the local checkout. ([#130](https://github.com/iamriajul/paseo/pull/130))
+- Changed a workspace with no agent activity for 6 hours to stop the 3-minute git fetch and forge pull-request poll until it is opened or an agent runs. ([#130](https://github.com/iamriajul/paseo/pull/130))
 
 ## 0.11.1 - 2026-10-07
 
