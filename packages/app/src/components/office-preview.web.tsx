@@ -14,7 +14,8 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
   const [width, setWidth] = useState(0);
   const measureWidth = useCallback((event: LayoutChangeEvent) => {
     const next = event.nativeEvent.layout.width;
-    setWidth((current) => (current === next ? current : next));
+    if (next <= 0) return;
+    setWidth((current) => (current > 0 ? current : next));
   }, []);
 
   useEffect(() => {

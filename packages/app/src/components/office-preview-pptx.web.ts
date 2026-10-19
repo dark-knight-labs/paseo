@@ -10,6 +10,11 @@ export async function openPptxPreview(input: {
     height: Math.round((width * 9) / 16),
     mode: "list",
   });
-  await previewer.preview(input.data);
+  try {
+    await previewer.preview(input.data);
+  } catch (error) {
+    previewer.destroy();
+    throw error;
+  }
   return { destroy: () => previewer.destroy() };
 }

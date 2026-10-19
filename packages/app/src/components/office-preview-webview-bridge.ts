@@ -61,16 +61,30 @@ export function startOfficePreviewWebView(input: {
   let session: { destroy: () => void } | null = null;
   let renderGeneration = 0;
 
-  const renderDocument = async (documentToRender: OfficePreviewDocument): Promise<void> => {
+  const destroySession = (current: { destroy: () => void } | null) => {
+    try {
+      current?.destroy();
+    } catch {
+      // The library removes its wrapper from the host. A second destroy, or a
+      // destroy after the host was cleared, throws NotFoundError.
+    }
+  };
+
+  const failIfCurrent = (generation: number) => {
+    if (generation === renderGeneration) sendToNative({ type: "failed" });
+  };
+
+  const renderDocument = async (
+    documentToRender: OfficePreviewDocument,
+    generation: number,
+  ): Promise<void> => {
     if (!host) {
-      sendToNative({ type: "failed" });
+      failIfCurrent(generation);
       return;
     }
-    const generation = renderGeneration + 1;
-    renderGeneration = generation;
     const data = documentToRender.bytes.buffer;
     if (!(data instanceof ArrayBuffer)) {
-      sendToNative({ type: "failed" });
+      failIfCurrent(generation);
       return;
     }
     const nextSession = await input.open({
@@ -79,21 +93,30 @@ export function startOfficePreviewWebView(input: {
       width: documentToRender.width,
     });
     if (generation !== renderGeneration) {
-      nextSession.destroy();
+      destroySession(nextSession);
       return;
     }
-    session?.destroy();
     session = nextSession;
     sendToNative({ type: "ready" });
   };
 
   window.__PASEO_OFFICE_PREVIEW_RECEIVE__ = (message) => {
-    const next = applyOfficePreviewMessage(assembly, message);
+    let next: ReturnType<typeof applyOfficePreviewMessage>;
+    try {
+      next = applyOfficePreviewMessage(assembly, message);
+    } catch {
+      sendToNative({ type: "failed" });
+      return;
+    }
     assembly = next.state;
     if (!next.document) return;
+    renderGeneration += 1;
+    const generation = renderGeneration;
+    destroySession(session);
+    session = null;
     host?.replaceChildren();
-    void renderDocument(next.document).catch(() => {
-      sendToNative({ type: "failed" });
+    void renderDocument(next.document, generation).catch(() => {
+      failIfCurrent(generation);
     });
   };
 

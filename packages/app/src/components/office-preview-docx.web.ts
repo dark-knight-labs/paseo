@@ -13,6 +13,11 @@ export async function openDocxPreview(input: {
     inWrapper: true,
     breakPages: true,
   });
-  await previewer.preview(input.data);
+  try {
+    await previewer.preview(input.data);
+  } catch (error) {
+    previewer.destroy();
+    throw error;
+  }
   return { destroy: () => previewer.destroy() };
 }

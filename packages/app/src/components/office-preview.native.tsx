@@ -51,7 +51,8 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
   const source = useMemo(() => (html === null ? null : { html, baseUrl: BASE_URL }), [html]);
   const measureWidth = useCallback((event: LayoutChangeEvent) => {
     const next = event.nativeEvent.layout.width;
-    setWidth((current) => (current === next ? current : next));
+    if (next <= 0) return;
+    setWidth((current) => (current > 0 ? current : next));
   }, []);
   const allowOnlyInitialDocument = useCallback(({ url }: { url: string }) => {
     const navigationKind = htmlPreviewNavigationKind(url);
