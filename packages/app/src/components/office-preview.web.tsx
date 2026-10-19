@@ -22,6 +22,11 @@ const frameStyle = {
   backgroundColor: "white",
 } as const;
 
+const hiddenFrameStyle = {
+  ...frameStyle,
+  display: "none",
+} as const;
+
 function loadOfficePreviewHtml(kind: OfficePreviewKind): Promise<string> {
   if (kind === "docx") {
     return import("./office-preview-webview-docx-html").then(
@@ -127,14 +132,14 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
       testID="office-file-preview"
       onLayout={measureWidth}
     >
-      {html && phase !== "failed" ? (
+      {html ? (
         <iframe
           ref={frameRef}
           title={label}
           srcDoc={html}
           sandbox={SANDBOX}
           referrerPolicy="no-referrer"
-          style={frameStyle}
+          style={phase === "failed" ? hiddenFrameStyle : frameStyle}
         />
       ) : null}
       {phase === "loading" ? (
