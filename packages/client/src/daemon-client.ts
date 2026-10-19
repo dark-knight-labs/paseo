@@ -2286,6 +2286,7 @@ export class DaemonClient {
     deviceType: "web" | "mobile";
     focusedAgentId: string | null;
     focusedTerminalId?: string | null;
+    openWorkspaceId?: string | null;
     lastActivityAt: string;
     appVisible: boolean;
     appVisibilityChangedAt?: string;
@@ -2295,6 +2296,7 @@ export class DaemonClient {
       deviceType: params.deviceType,
       focusedAgentId: params.focusedAgentId,
       focusedTerminalId: params.focusedTerminalId ?? null,
+      openWorkspaceId: params.openWorkspaceId ?? null,
       lastActivityAt: params.lastActivityAt,
       appVisible: params.appVisible,
       appVisibilityChangedAt: params.appVisibilityChangedAt,
@@ -3168,6 +3170,36 @@ export class DaemonClient {
     });
     if (!payload.accepted) {
       throw new Error(payload.error ?? "detachAgent rejected");
+    }
+  }
+
+  async resumeRateLimitCooldown(agentId: string): Promise<void> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.rate_limit_cooldown.resume.response">(
+        {
+          message: {
+            type: "agent.rate_limit_cooldown.resume.request",
+            agentId,
+          },
+        },
+      );
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "Failed to resume agent");
+    }
+  }
+
+  async cancelRateLimitCooldown(agentId: string): Promise<void> {
+    const payload =
+      await this.sendNamespacedCorrelatedSessionRequest<"agent.rate_limit_cooldown.cancel.response">(
+        {
+          message: {
+            type: "agent.rate_limit_cooldown.cancel.request",
+            agentId,
+          },
+        },
+      );
+    if (!payload.accepted) {
+      throw new Error(payload.error ?? "Failed to cancel rate limit cooldown");
     }
   }
 

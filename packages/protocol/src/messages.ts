@@ -910,6 +910,14 @@ const AgentActiveTurnPayloadSchema = z.object({
   startedAt: z.string().nullable(),
 });
 
+export const AgentRateLimitCooldownPayloadSchema = z.object({
+  scheduledFor: z.string(),
+  retryAfter: z.string(),
+  consecutiveResumes: z.number().optional(),
+});
+
+export type AgentRateLimitCooldownPayload = z.infer<typeof AgentRateLimitCooldownPayloadSchema>;
+
 export const AgentSnapshotPayloadSchema = z.object({
   id: z.string(),
   provider: AgentProviderSchema,
@@ -939,6 +947,7 @@ export const AgentSnapshotPayloadSchema = z.object({
   attentionTimestamp: z.string().nullable().optional(),
   archivedAt: z.string().nullable().optional(),
   providerUnavailable: z.boolean().optional(),
+  rateLimitCooldown: AgentRateLimitCooldownPayloadSchema.nullable().optional(),
 });
 
 export type AgentSnapshotPayload = z.infer<typeof AgentSnapshotPayloadSchema>;
@@ -962,6 +971,7 @@ export const AgentListItemPayloadSchema = z.object({
   attentionTimestamp: z.string().nullable().optional(),
   labels: z.record(z.string(), z.string()).default({}),
   providerUnavailable: z.boolean().optional(),
+  rateLimitCooldown: AgentRateLimitCooldownPayloadSchema.nullable().optional(),
 });
 
 export type AgentListItemPayload = z.infer<typeof AgentListItemPayloadSchema>;
@@ -2283,6 +2293,36 @@ export const AgentRewindResponseMessageSchema = z.object({
   }),
 });
 
+export const AgentRateLimitCooldownResumeRequestMessageSchema = z.object({
+  type: z.literal("agent.rate_limit_cooldown.resume.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+});
+
+export const AgentRateLimitCooldownResumeResponseMessageSchema = z.object({
+  type: z.literal("agent.rate_limit_cooldown.resume.response"),
+  payload: z.object({
+    requestId: z.string(),
+    accepted: z.boolean(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
+export const AgentRateLimitCooldownCancelRequestMessageSchema = z.object({
+  type: z.literal("agent.rate_limit_cooldown.cancel.request"),
+  requestId: z.string(),
+  agentId: z.string(),
+});
+
+export const AgentRateLimitCooldownCancelResponseMessageSchema = z.object({
+  type: z.literal("agent.rate_limit_cooldown.cancel.response"),
+  payload: z.object({
+    requestId: z.string(),
+    accepted: z.boolean(),
+    error: z.string().nullable().optional(),
+  }),
+});
+
 export const UpdateAgentResponseMessageSchema = z.object({
   type: z.literal("update_agent_response"),
   payload: AgentActionResponsePayloadSchema,
@@ -3124,6 +3164,9 @@ export const ClientHeartbeatMessageSchema = z.object({
   focusedAgentId: z.string().nullable(),
   // COMPAT(terminalFocusHeartbeat): added in v0.1.97, remove optional default after 2026-12-13 once old clients no longer send heartbeats without terminal focus.
   focusedTerminalId: z.string().nullable().optional().default(null),
+  // COMPAT(open-workspace-heartbeat): added in v0.11.907, remove optional default after 2027-04-19 once old clients no longer send heartbeats without an open workspace.
+  // Do not infer a workspace from focusedAgentId.
+  openWorkspaceId: z.string().min(1).nullable().optional().default(null),
   lastActivityAt: z.string(),
   appVisible: z.boolean(),
   appVisibilityChangedAt: z.string().optional(),
@@ -3562,6 +3605,8 @@ export const SessionInboundMessageSchema = z.discriminatedUnion("type", [
   AgentConfigApplyRequestMessageSchema,
   AgentDetachRequestMessageSchema,
   AgentRewindRequestMessageSchema,
+  AgentRateLimitCooldownResumeRequestMessageSchema,
+  AgentRateLimitCooldownCancelRequestMessageSchema,
   AgentPermissionResponseMessageSchema,
   CheckoutStatusRequestSchema,
   CheckoutDiffGetRequestSchema,
@@ -4068,6 +4113,8 @@ export const ServerInfoStatusPayloadSchema = z
         agentConfigApply: z.boolean().optional(),
         // COMPAT(scheduledPrompt): added in v0.12.0, remove after 2027-04-12.
         scheduledPrompt: z.boolean().optional(),
+        // COMPAT(rateLimitCooldownControls): added in v0.12.0, remove after 2027-04-18.
+        rateLimitCooldownControls: z.boolean().optional(),
       })
       .optional(),
   })
@@ -7631,6 +7678,8 @@ export const SessionOutboundMessageSchema = z.discriminatedUnion("type", [
   AgentConfigApplyResponseMessageSchema,
   AgentDetachResponseMessageSchema,
   AgentRewindResponseMessageSchema,
+  AgentRateLimitCooldownResumeResponseMessageSchema,
+  AgentRateLimitCooldownCancelResponseMessageSchema,
   UpdateAgentResponseMessageSchema,
   ProjectRenameResponseSchema,
   ProjectIconSetResponseSchema,
@@ -7851,6 +7900,18 @@ export type SetAgentFeatureResponseMessage = z.infer<typeof SetAgentFeatureRespo
 export type AgentConfigApplyResponseMessage = z.infer<typeof AgentConfigApplyResponseMessageSchema>;
 export type AgentDetachResponseMessage = z.infer<typeof AgentDetachResponseMessageSchema>;
 export type AgentRewindResponseMessage = z.infer<typeof AgentRewindResponseMessageSchema>;
+export type AgentRateLimitCooldownResumeRequestMessage = z.infer<
+  typeof AgentRateLimitCooldownResumeRequestMessageSchema
+>;
+export type AgentRateLimitCooldownResumeResponseMessage = z.infer<
+  typeof AgentRateLimitCooldownResumeResponseMessageSchema
+>;
+export type AgentRateLimitCooldownCancelRequestMessage = z.infer<
+  typeof AgentRateLimitCooldownCancelRequestMessageSchema
+>;
+export type AgentRateLimitCooldownCancelResponseMessage = z.infer<
+  typeof AgentRateLimitCooldownCancelResponseMessageSchema
+>;
 export type UpdateAgentResponseMessage = z.infer<typeof UpdateAgentResponseMessageSchema>;
 export type ProjectRenameResponse = z.infer<typeof ProjectRenameResponseSchema>;
 export type ProjectIconSetResponse = z.infer<typeof ProjectIconSetResponseSchema>;
