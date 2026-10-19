@@ -229,6 +229,8 @@ function createPollHarness(options?: {
         : { forgeOverrides: { github: forge as unknown as ForgeService } }),
     },
   });
+  // Bound to an empty set. A service the gate has not touched still fetches.
+  service.applyRemotePoll(new Set());
   return {
     service,
     runGitFetch,

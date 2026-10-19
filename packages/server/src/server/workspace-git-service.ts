@@ -644,8 +644,11 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
   >({ max: WORKSPACE_GIT_AUXILIARY_CACHE_MAX });
   private readonly checkoutDiffCache = new CheckoutDiffCache(() => this.deps.now().getTime());
   private watcherErrorCallbackCount = 0;
-  /** Empty until the first apply, so register watches and does not fetch. */
-  private remotePollCwds: ReadonlySet<string> = new Set();
+  /**
+   * Null until the first apply. A service nothing has gated keeps today's
+   * fetch and PR poll. An applied set, including an empty one, is the gate.
+   */
+  private remotePollCwds: ReadonlySet<string> | null = null;
   constructor(options: WorkspaceGitServiceOptions) {
     this.logger = options.logger.child({ module: "workspace-git-service" });
     this.paseoHome = options.paseoHome;
@@ -694,13 +697,22 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     for (const cwd of cwds) {
       next.add(resolve(cwd));
     }
-    if (setsEqual(this.remotePollCwds, next)) return;
     const previous = this.remotePollCwds;
+    if (previous && setsEqual(previous, next)) return;
     this.remotePollCwds = next;
-    const touched = new Set<string>([...previous, ...next, ...this.workspaceTargets.keys()]);
+    const touched = new Set<string>([
+      ...(previous ?? []),
+      ...next,
+      ...this.workspaceTargets.keys(),
+    ]);
     for (const cwd of touched) {
-      this.syncRemotePoll(cwd, next.has(cwd) && !previous.has(cwd));
+      const wasAdmitted = previous === null || previous.has(cwd);
+      this.syncRemotePoll(cwd, next.has(cwd) && !wasAdmitted);
     }
+  }
+
+  private isRemotePollAdmitted(cwd: string): boolean {
+    return this.remotePollCwds === null || this.remotePollCwds.has(cwd);
   }
 
   onSnapshotUpdated(listener: WorkspaceGitSnapshotUpdatedListener): WorkspaceGitSubscription {
@@ -2795,7 +2807,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       if (repoTarget) this.releaseRepoFetchIfUnadmitted(repoTarget);
       return;
     }
-    if (!this.remotePollCwds.has(cwd)) {
+    if (!this.isRemotePollAdmitted(cwd)) {
       this.stopForgePrStatusPollForTarget(target);
       const repoTarget = target.repoGitRoot ? this.repoTargets.get(target.repoGitRoot) : undefined;
       if (repoTarget) this.releaseRepoFetchIfUnadmitted(repoTarget);
@@ -2814,7 +2826,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       const workspaceTarget = this.workspaceTargets.get(workspaceKey);
       if (
         workspaceTarget &&
-        this.remotePollCwds.has(workspaceKey) &&
+        this.isRemotePollAdmitted(workspaceKey) &&
         this.isActiveObservedWorkspaceTarget(workspaceTarget)
       ) {
         return;
@@ -2834,7 +2846,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
       const workspaceTarget = this.workspaceTargets.get(workspaceKey);
       if (
         workspaceTarget &&
-        this.remotePollCwds.has(workspaceKey) &&
+        this.isRemotePollAdmitted(workspaceKey) &&
         this.isActiveObservedWorkspaceTarget(workspaceTarget)
       ) {
         admitted = true;
@@ -3105,7 +3117,7 @@ export class WorkspaceGitServiceImpl implements WorkspaceGitService {
     if (target.closed || this.workspaceTargets.get(target.cwd) !== target) {
       return;
     }
-    const polledRequest = this.remotePollCwds.has(target.cwd)
+    const polledRequest = this.isRemotePollAdmitted(target.cwd)
       ? request
       : { ...request, includeForge: false };
     try {
