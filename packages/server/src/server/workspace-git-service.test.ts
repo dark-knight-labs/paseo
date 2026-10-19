@@ -321,7 +321,6 @@ function createService(options?: CreateServiceTestOptions) {
     paseoHome: "/tmp/paseo-test",
     deps,
   });
-  service.applyRemotePoll(new Set([REPO_CWD]));
   return service;
 }
 
