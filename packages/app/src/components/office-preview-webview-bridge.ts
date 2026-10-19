@@ -45,6 +45,9 @@ html, body, #host {
 
 function sendToNative(message: { type: "bridgeReady" | "ready" | "failed" }): void {
   window.ReactNativeWebView?.postMessage?.(JSON.stringify(message));
+  if (window.parent !== window) {
+    window.parent.postMessage(message, "*");
+  }
 }
 
 export function startOfficePreviewWebView(input: {
@@ -100,7 +103,7 @@ export function startOfficePreviewWebView(input: {
     sendToNative({ type: "ready" });
   };
 
-  window.__PASEO_OFFICE_PREVIEW_RECEIVE__ = (message) => {
+  const receive = (message: OfficePreviewInbound) => {
     let next: ReturnType<typeof applyOfficePreviewMessage>;
     try {
       next = applyOfficePreviewMessage(assembly, message);
@@ -119,6 +122,14 @@ export function startOfficePreviewWebView(input: {
       failIfCurrent(generation);
     });
   };
+
+  window.__PASEO_OFFICE_PREVIEW_RECEIVE__ = receive;
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const data = event.data as OfficePreviewInbound | null;
+    if (!data || (data.type !== "begin" && data.type !== "chunk" && data.type !== "end")) return;
+    receive(data);
+  });
 
   sendToNative({ type: "bridgeReady" });
 }

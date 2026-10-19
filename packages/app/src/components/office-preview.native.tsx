@@ -16,6 +16,7 @@ import type { OfficePreviewProps } from "./office-preview";
 // loads once, and later navigations are refused so the file cannot browse away.
 const ORIGIN_WHITELIST = ["*"];
 const BASE_URL = "about:blank";
+const BRIDGE_READY_TIMEOUT_MS = 8_000;
 
 type PreviewPhase = "loading" | "ready" | "failed";
 
@@ -92,6 +93,12 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
       cancelled = true;
     };
   }, [kind]);
+
+  useEffect(() => {
+    if (!html || bridgeReady) return;
+    const timer = setTimeout(() => setPhase("failed"), BRIDGE_READY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [bridgeReady, html, kind]);
 
   useEffect(() => {
     const webView = webViewRef.current;

@@ -2,16 +2,58 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, type LayoutChangeEvent, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { StyleSheet } from "react-native-unistyles";
-import { openOfficePreview } from "@/components/office-preview-render.web";
+import { officePreviewTransferMessages } from "@/components/office-preview-bytes";
+import type { OfficePreviewKind } from "@/file-explorer/office";
 import type { OfficePreviewProps } from "./office-preview";
+
+// Same isolation as the HTML preview. allow-scripts with no allow-same-origin
+// gives the document an opaque origin, so a file that injects markup cannot
+// reach the app document, its storage, or the daemon socket.
+const SANDBOX = "allow-scripts";
+const BRIDGE_READY_TIMEOUT_MS = 8_000;
 
 type PreviewPhase = "loading" | "ready" | "failed";
 
+const frameStyle = {
+  flex: 1,
+  width: "100%",
+  height: "100%",
+  border: "none",
+  backgroundColor: "white",
+} as const;
+
+function loadOfficePreviewHtml(kind: OfficePreviewKind): Promise<string> {
+  if (kind === "docx") {
+    return import("./office-preview-webview-docx-html").then(
+      (mod) => mod.officePreviewDocxWebViewHtml,
+    );
+  }
+  if (kind === "xlsx") {
+    return import("./office-preview-webview-xlsx-html").then(
+      (mod) => mod.officePreviewXlsxWebViewHtml,
+    );
+  }
+  return import("./office-preview-webview-pptx-html").then(
+    (mod) => mod.officePreviewPptxWebViewHtml,
+  );
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  const size = 0x8000;
+  for (let index = 0; index < bytes.length; index += size) {
+    parts.push(String.fromCharCode(...bytes.subarray(index, index + size)));
+  }
+  return btoa(parts.join(""));
+}
+
 export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
   const { t } = useTranslation();
-  const hostRef = useRef<HTMLElement | null>(null);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const [html, setHtml] = useState<string | null>(null);
   const [phase, setPhase] = useState<PreviewPhase>("loading");
   const [width, setWidth] = useState(0);
+  const [bridgeReady, setBridgeReady] = useState(false);
   const measureWidth = useCallback((event: LayoutChangeEvent) => {
     const next = event.nativeEvent.layout.width;
     if (next <= 0) return;
@@ -19,45 +61,64 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
   }, []);
 
   useEffect(() => {
-    const node = hostRef.current;
-    if (width <= 0) return;
-    if (!(node instanceof HTMLElement)) {
-      setPhase("failed");
-      return;
-    }
-
     let cancelled = false;
-    let session: { destroy: () => void } | null = null;
+    setHtml(null);
     setPhase("loading");
-    node.replaceChildren();
+    setBridgeReady(false);
+    void (async () => {
+      try {
+        const nextHtml = await loadOfficePreviewHtml(kind);
+        if (!cancelled) setHtml(nextHtml);
+      } catch {
+        if (!cancelled) setPhase("failed");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [kind]);
 
+  useEffect(() => {
+    if (!html || bridgeReady) return;
+    const timer = setTimeout(() => setPhase("failed"), BRIDGE_READY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [bridgeReady, html, kind]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== frameRef.current?.contentWindow) return;
+      const data = event.data as { type?: string } | null;
+      if (data?.type === "bridgeReady") setBridgeReady(true);
+      if (data?.type === "ready") setPhase("ready");
+      if (data?.type === "failed") setPhase("failed");
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  useEffect(() => {
+    const frame = frameRef.current?.contentWindow;
+    if (!frame || !bridgeReady || width <= 0) return;
+    let cancelled = false;
+    setPhase("loading");
     void (async () => {
       try {
         const response = await fetch(uri);
         if (!response.ok) throw new Error("preview fetch failed");
-        const data = await response.arrayBuffer();
+        const bytes = new Uint8Array(await response.arrayBuffer());
         if (cancelled) return;
-        session = await openOfficePreview({ kind, host: node, data, width });
-        if (cancelled) {
-          session.destroy();
-          session = null;
-          return;
+        const base64 = bytesToBase64(bytes);
+        for (const message of officePreviewTransferMessages({ kind, width, base64 })) {
+          frame.postMessage(message, "*");
         }
-        setPhase("ready");
       } catch {
-        if (!cancelled) {
-          node.replaceChildren();
-          setPhase("failed");
-        }
+        if (!cancelled) setPhase("failed");
       }
     })();
-
     return () => {
       cancelled = true;
-      session?.destroy();
-      session = null;
     };
-  }, [kind, uri, width]);
+  }, [bridgeReady, kind, uri, width]);
 
   return (
     <View
@@ -66,7 +127,16 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
       testID="office-file-preview"
       onLayout={measureWidth}
     >
-      <View ref={hostRef as never} style={phase === "failed" ? styles.hiddenHost : styles.host} />
+      {html && phase !== "failed" ? (
+        <iframe
+          ref={frameRef}
+          title={label}
+          srcDoc={html}
+          sandbox={SANDBOX}
+          referrerPolicy="no-referrer"
+          style={frameStyle}
+        />
+      ) : null}
       {phase === "loading" ? (
         <View style={styles.loading}>
           <ActivityIndicator size="small" />
@@ -85,13 +155,6 @@ const styles = StyleSheet.create((theme) => ({
   container: {
     flex: 1,
     minHeight: 0,
-  },
-  host: {
-    flex: 1,
-    minHeight: 0,
-  },
-  hiddenHost: {
-    display: "none",
   },
   loading: {
     position: "absolute",
