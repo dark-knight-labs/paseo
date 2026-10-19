@@ -2,12 +2,13 @@ export async function openPptxPreview(input: {
   host: HTMLElement;
   data: ArrayBuffer;
   width: number;
+  height: number;
 }): Promise<{ destroy: () => void }> {
   const { init } = await import("pptx-preview");
   const width = Math.max(input.width, 320);
   const previewer = init(input.host, {
     width,
-    height: Math.round((width * 9) / 16),
+    height: Math.max(Math.round(input.height), 1),
     mode: "list",
   });
   try {

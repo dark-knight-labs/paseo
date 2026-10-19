@@ -5,33 +5,36 @@ import type { OfficePreviewKind } from "@/file-explorer/office";
 export const OFFICE_PREVIEW_BASE64_CHUNK_CHARS = 128 * 1024;
 
 export type OfficePreviewInbound =
-  | { type: "begin"; kind: OfficePreviewKind; width: number }
+  | { type: "begin"; kind: OfficePreviewKind; width: number; height: number }
   | { type: "chunk"; data: string }
   | { type: "end" };
 
 export interface OfficePreviewAssembly {
   kind: OfficePreviewKind | null;
   width: number;
+  height: number;
   chunks: string[];
 }
 
 export interface OfficePreviewDocument {
   kind: OfficePreviewKind;
   width: number;
+  height: number;
   bytes: Uint8Array;
 }
 
 export function createOfficePreviewAssembly(): OfficePreviewAssembly {
-  return { kind: null, width: 0, chunks: [] };
+  return { kind: null, width: 0, height: 0, chunks: [] };
 }
 
 export function officePreviewTransferMessages(input: {
   kind: OfficePreviewKind;
   width: number;
+  height: number;
   base64: string;
 }): OfficePreviewInbound[] {
   const messages: OfficePreviewInbound[] = [
-    { type: "begin", kind: input.kind, width: input.width },
+    { type: "begin", kind: input.kind, width: input.width, height: input.height },
   ];
   for (let index = 0; index < input.base64.length; index += OFFICE_PREVIEW_BASE64_CHUNK_CHARS) {
     messages.push({
@@ -58,7 +61,7 @@ export function applyOfficePreviewMessage(
 ): { state: OfficePreviewAssembly; document: OfficePreviewDocument | null } {
   if (message.type === "begin") {
     return {
-      state: { kind: message.kind, width: message.width, chunks: [] },
+      state: { kind: message.kind, width: message.width, height: message.height, chunks: [] },
       document: null,
     };
   }
@@ -76,6 +79,7 @@ export function applyOfficePreviewMessage(
     document: {
       kind: state.kind,
       width: state.width,
+      height: state.height,
       bytes: bytesFromBase64(state.chunks.join("")),
     },
   };

@@ -58,11 +58,13 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
   const [html, setHtml] = useState<string | null>(null);
   const [phase, setPhase] = useState<PreviewPhase>("loading");
   const [width, setWidth] = useState(0);
+  const [height, setHeight] = useState(0);
   const [bridgeReady, setBridgeReady] = useState(false);
-  const measureWidth = useCallback((event: LayoutChangeEvent) => {
-    const next = event.nativeEvent.layout.width;
-    if (next <= 0) return;
-    setWidth((current) => (current > 0 ? current : next));
+  const measurePane = useCallback((event: LayoutChangeEvent) => {
+    const nextWidth = event.nativeEvent.layout.width;
+    const nextHeight = event.nativeEvent.layout.height;
+    if (nextWidth > 0) setWidth((current) => (current > 0 ? current : nextWidth));
+    if (nextHeight > 0) setHeight((current) => (current > 0 ? current : nextHeight));
   }, []);
 
   useEffect(() => {
@@ -103,7 +105,7 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
 
   useEffect(() => {
     const frame = frameRef.current?.contentWindow;
-    if (!frame || !bridgeReady || width <= 0) return;
+    if (!frame || !bridgeReady || width <= 0 || height <= 0) return;
     let cancelled = false;
     setPhase("loading");
     void (async () => {
@@ -113,7 +115,7 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
         const bytes = new Uint8Array(await response.arrayBuffer());
         if (cancelled) return;
         const base64 = bytesToBase64(bytes);
-        for (const message of officePreviewTransferMessages({ kind, width, base64 })) {
+        for (const message of officePreviewTransferMessages({ kind, width, height, base64 })) {
           frame.postMessage(message, "*");
         }
       } catch {
@@ -123,14 +125,14 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
     return () => {
       cancelled = true;
     };
-  }, [bridgeReady, kind, uri, width]);
+  }, [bridgeReady, height, kind, uri, width]);
 
   return (
     <View
       style={styles.container}
       accessibilityLabel={label}
       testID="office-file-preview"
-      onLayout={measureWidth}
+      onLayout={measurePane}
     >
       {html ? (
         <iframe

@@ -82,10 +82,28 @@ for (const [kind, entryName, exportName] of documents) {
   }
 
   const safeJs = js.replace(/<\/script/gi, "<\\/script");
+  // Excel reloads the workbook with an XHR to a blob: URL of the bytes already
+  // in the page, and both Excel and Word call new Function. connect-src allows
+  // that blob URL and no origin. Remote fetch, images, frames, and form posts
+  // stay refused, same as the HTML preview.
+  const csp = [
+    "default-src 'none'",
+    "script-src 'unsafe-inline' 'unsafe-eval' blob:",
+    "style-src 'unsafe-inline'",
+    "img-src data: blob:",
+    "font-src data: blob:",
+    "media-src data: blob:",
+    "connect-src blob:",
+    "form-action 'none'",
+    "base-uri 'none'",
+    "frame-src 'none'",
+    "object-src 'none'",
+  ].join("; ");
   const html = `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="${csp}" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"

@@ -16,10 +16,11 @@ describe("office preview transfer", () => {
     const messages = officePreviewTransferMessages({
       kind: "docx",
       width: 640,
+      height: 480,
       base64,
     });
 
-    expect(messages[0]).toEqual({ type: "begin", kind: "docx", width: 640 });
+    expect(messages[0]).toEqual({ type: "begin", kind: "docx", width: 640, height: 480 });
     expect(messages.at(-1)).toEqual({ type: "end" });
     expect(messages.filter((message) => message.type === "chunk").length).toBeGreaterThan(1);
 
@@ -33,6 +34,7 @@ describe("office preview transfer", () => {
 
     expect(document?.kind).toBe("docx");
     expect(document?.width).toBe(640);
+    expect(document?.height).toBe(480);
     expect(document?.bytes).toEqual(original);
   });
 

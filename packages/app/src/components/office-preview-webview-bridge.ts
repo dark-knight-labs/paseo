@@ -56,6 +56,7 @@ export function startOfficePreviewWebView(input: {
     host: HTMLElement;
     data: ArrayBuffer;
     width: number;
+    height: number;
   }) => Promise<{ destroy: () => void }>;
 }): void {
   installStyles(input.css);
@@ -94,6 +95,7 @@ export function startOfficePreviewWebView(input: {
       host,
       data,
       width: documentToRender.width,
+      height: documentToRender.height,
     });
     if (generation !== renderGeneration) {
       destroySession(nextSession);

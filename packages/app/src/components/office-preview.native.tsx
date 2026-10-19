@@ -48,12 +48,16 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
   const [html, setHtml] = useState<string | null>(null);
   const [phase, setPhase] = useState<PreviewPhase>("loading");
   const [width, setWidth] = useState(0);
+  const [height, setHeight] = useState(0);
+  const [mountId, setMountId] = useState(0);
   const [bridgeReady, setBridgeReady] = useState(false);
+  const rendererGoneRef = useRef(false);
   const source = useMemo(() => (html === null ? null : { html, baseUrl: BASE_URL }), [html]);
-  const measureWidth = useCallback((event: LayoutChangeEvent) => {
-    const next = event.nativeEvent.layout.width;
-    if (next <= 0) return;
-    setWidth((current) => (current > 0 ? current : next));
+  const measurePane = useCallback((event: LayoutChangeEvent) => {
+    const nextWidth = event.nativeEvent.layout.width;
+    const nextHeight = event.nativeEvent.layout.height;
+    if (nextWidth > 0) setWidth((current) => (current > 0 ? current : nextWidth));
+    if (nextHeight > 0) setHeight((current) => (current > 0 ? current : nextHeight));
   }, []);
   const allowOnlyInitialDocument = useCallback(({ url }: { url: string }) => {
     const navigationKind = htmlPreviewNavigationKind(url);
@@ -73,6 +77,14 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
     if (message.type === "bridgeReady") setBridgeReady(true);
     if (message.type === "ready") setPhase("ready");
     if (message.type === "failed") setPhase("failed");
+  }, []);
+  const markRendererGone = useCallback(() => {
+    setBridgeReady(false);
+    setPhase("failed");
+    if (rendererGoneRef.current) return;
+    rendererGoneRef.current = true;
+    loadedDocumentRef.current = false;
+    setMountId((current) => current + 1);
   }, []);
 
   useEffect(() => {
@@ -101,8 +113,13 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
   }, [bridgeReady, html, kind]);
 
   useEffect(() => {
+    rendererGoneRef.current = false;
+  }, [kind, uri]);
+
+  useEffect(() => {
     const webView = webViewRef.current;
-    if (!webView || !bridgeReady || width <= 0) return;
+    if (!webView || !bridgeReady || width <= 0 || height <= 0) return;
+    if (rendererGoneRef.current) return;
     let cancelled = false;
     setPhase("loading");
     void (async () => {
@@ -111,7 +128,7 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
           encoding: FileSystem.EncodingType.Base64,
         });
         if (cancelled) return;
-        for (const message of officePreviewTransferMessages({ kind, width, base64 })) {
+        for (const message of officePreviewTransferMessages({ kind, width, height, base64 })) {
           webView.injectJavaScript(scriptForMessage(message));
         }
       } catch {
@@ -121,24 +138,26 @@ export function OfficePreview({ uri, label, kind }: OfficePreviewProps) {
     return () => {
       cancelled = true;
     };
-  }, [bridgeReady, kind, uri, width]);
+  }, [bridgeReady, height, kind, uri, width]);
 
   return (
     <View
       style={styles.container}
       accessibilityLabel={label}
       testID="office-file-preview"
-      onLayout={measureWidth}
+      onLayout={measurePane}
     >
       {source ? (
         <WebView
           ref={webViewRef}
-          key={kind}
+          key={`${kind}:${mountId}`}
           style={phase === "failed" ? styles.hidden : styles.webview}
           source={source}
           originWhitelist={ORIGIN_WHITELIST}
           onShouldStartLoadWithRequest={allowOnlyInitialDocument}
           onMessage={onMessage}
+          onContentProcessDidTerminate={markRendererGone}
+          onRenderProcessGone={markRendererGone}
           setSupportMultipleWindows={false}
           javaScriptCanOpenWindowsAutomatically={false}
           domStorageEnabled={false}
