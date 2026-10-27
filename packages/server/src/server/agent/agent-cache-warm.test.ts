@@ -26,7 +26,7 @@ describe("AgentCacheWarmManager", () => {
   });
 
   interface HarnessOptions {
-    featureEnabled?: boolean;
+    featureEnabled?: boolean | "default";
     lifecycle?: "idle" | "running" | "closed";
     archived?: boolean;
     pendingPermissions?: number;
@@ -56,6 +56,14 @@ describe("AgentCacheWarmManager", () => {
       }
     }
 
+    const featureValues: Record<string, unknown> = {};
+    if (options.promptCacheTtl) {
+      featureValues.prompt_cache_ttl = options.promptCacheTtl;
+    }
+    if (options.featureEnabled !== "default") {
+      featureValues[CLAUDE_CACHE_WARM_FEATURE_ID] = options.featureEnabled ?? true;
+    }
+
     return {
       id: "agent-1",
       provider: "claude",
@@ -63,10 +71,7 @@ describe("AgentCacheWarmManager", () => {
       config: {
         provider: "claude",
         cwd: "/test",
-        featureValues: {
-          [CLAUDE_CACHE_WARM_FEATURE_ID]: options.featureEnabled ?? true,
-          ...(options.promptCacheTtl ? { prompt_cache_ttl: options.promptCacheTtl } : {}),
-        },
+        featureValues,
       },
       lifecycle,
       pendingPermissions: pendingPermissions as unknown as ManagedAgent["pendingPermissions"],
@@ -782,5 +787,186 @@ describe("AgentCacheWarmManager", () => {
 
     await vi.advanceTimersByTimeAsync(DEFAULT_CACHE_WARM_INTERVAL_MS);
     expect(respondToPermission).not.toHaveBeenCalled();
+  });
+
+  describe("5m TTL and subagent defaults", () => {
+    it("defaults to enabled for subagent when cache_warm is unset", () => {
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: "default",
+        isSubagent: true,
+      });
+
+      expect(manager.isFeatureEnabled(mockAgent.id)).toBe(true);
+      expect(manager.schedule(mockAgent.id)).toBe(true);
+      expect(manager.hasPending(mockAgent.id)).toBe(true);
+    });
+
+    it("defaults to enabled for explicit 5m TTL session when cache_warm is unset", () => {
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: "default",
+        isSubagent: false,
+        promptCacheTtl: "5m",
+      });
+
+      expect(manager.isFeatureEnabled(mockAgent.id)).toBe(true);
+      expect(manager.schedule(mockAgent.id)).toBe(true);
+      expect(manager.hasPending(mockAgent.id)).toBe(true);
+    });
+
+    it("defaults to disabled for root 1h/default TTL session when cache_warm is unset", () => {
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: "default",
+        isSubagent: false,
+        promptCacheTtl: "default",
+      });
+
+      expect(manager.isFeatureEnabled(mockAgent.id)).toBe(false);
+      expect(manager.schedule(mockAgent.id)).toBe(false);
+      expect(manager.hasPending(mockAgent.id)).toBe(false);
+    });
+
+    it("defaults to disabled for subagent overridden with 1h TTL when cache_warm is unset", () => {
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: "default",
+        isSubagent: true,
+        promptCacheTtl: "1h",
+      });
+
+      expect(manager.isFeatureEnabled(mockAgent.id)).toBe(false);
+      expect(manager.schedule(mockAgent.id)).toBe(false);
+    });
+
+    it("respects explicit cache_warm: false even for 5m TTL or subagents", () => {
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: false,
+        isSubagent: true,
+        promptCacheTtl: "5m",
+      });
+
+      expect(manager.isFeatureEnabled(mockAgent.id)).toBe(false);
+      expect(manager.schedule(mockAgent.id)).toBe(false);
+    });
+
+    it("respects explicit cache_warm: true for 1h sessions", () => {
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: true,
+        isSubagent: false,
+        promptCacheTtl: "1h",
+      });
+
+      expect(manager.isFeatureEnabled(mockAgent.id)).toBe(true);
+      expect(manager.schedule(mockAgent.id)).toBe(true);
+    });
+  });
+
+  describe("onTtlChanged dynamic watchdog updates", () => {
+    it("dynamically schedules 4m watchdog timer when switching from 1h to 5m", () => {
+      const startTime = new Date("2026-10-25T12:00:00.000Z").getTime();
+      vi.setSystemTime(startTime);
+
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: "default",
+        isSubagent: false,
+        promptCacheTtl: "1h",
+        lastResponseAt: new Date(startTime),
+      });
+
+      // Initially 1h default: disabled
+      expect(manager.isFeatureEnabled(mockAgent.id)).toBe(false);
+      expect(manager.hasPending(mockAgent.id)).toBe(false);
+
+      // 1 minute elapses
+      vi.setSystemTime(startTime + 60_000);
+
+      // Switch TTL to 5m
+      mockAgent.config.featureValues = { prompt_cache_ttl: "5m" };
+      manager.onTtlChanged(mockAgent.id);
+
+      // Now enabled by default with 4m interval, remaining 3m
+      expect(manager.isFeatureEnabled(mockAgent.id)).toBe(true);
+      expect(manager.hasPending(mockAgent.id)).toBe(true);
+      const pending = manager.getPending(mockAgent.id);
+      expect(pending?.scheduledFor.getTime()).toBe(startTime + 4 * 60_000);
+    });
+
+    it("dynamically cancels watchdog timer when switching from 5m to 1h without explicit toggle", () => {
+      const startTime = new Date("2026-10-25T12:00:00.000Z").getTime();
+      vi.setSystemTime(startTime);
+
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: "default",
+        isSubagent: false,
+        promptCacheTtl: "5m",
+        lastResponseAt: new Date(startTime),
+      });
+
+      expect(manager.schedule(mockAgent.id)).toBe(true);
+      expect(manager.hasPending(mockAgent.id)).toBe(true);
+
+      // Switch TTL to 1h
+      mockAgent.config.featureValues = { prompt_cache_ttl: "1h" };
+      manager.onTtlChanged(mockAgent.id);
+
+      expect(manager.isFeatureEnabled(mockAgent.id)).toBe(false);
+      expect(manager.hasPending(mockAgent.id)).toBe(false);
+    });
+
+    it("dynamically updates interval from 4m to 58m when switching 5m to 1h with explicit cache_warm: true", () => {
+      const startTime = new Date("2026-10-25T12:00:00.000Z").getTime();
+      vi.setSystemTime(startTime);
+
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: true,
+        isSubagent: false,
+        promptCacheTtl: "5m",
+        lastResponseAt: new Date(startTime),
+      });
+
+      expect(manager.schedule(mockAgent.id)).toBe(true);
+      expect(manager.getPending(mockAgent.id)?.scheduledFor.getTime()).toBe(startTime + 4 * 60_000);
+
+      // 2 minutes elapse
+      vi.setSystemTime(startTime + 2 * 60_000);
+
+      // Switch TTL to 1h
+      mockAgent.config.featureValues = {
+        [CLAUDE_CACHE_WARM_FEATURE_ID]: true,
+        prompt_cache_ttl: "1h",
+      };
+      manager.onTtlChanged(mockAgent.id);
+
+      expect(manager.hasPending(mockAgent.id)).toBe(true);
+      expect(manager.getPending(mockAgent.id)?.scheduledFor.getTime()).toBe(
+        startTime + 58 * 60_000,
+      );
+    });
+
+    it("cancels timer and does not reschedule when switching to 5m if cache has already expired", () => {
+      const startTime = new Date("2026-10-25T12:00:00.000Z").getTime();
+      vi.setSystemTime(startTime);
+
+      const { manager, mockAgent } = createHarness({
+        featureEnabled: true,
+        isSubagent: false,
+        promptCacheTtl: "1h",
+        lastResponseAt: new Date(startTime),
+      });
+
+      expect(manager.schedule(mockAgent.id)).toBe(true);
+      expect(manager.hasPending(mockAgent.id)).toBe(true);
+
+      // 10 minutes elapse (> 5m window)
+      vi.setSystemTime(startTime + 10 * 60_000);
+
+      // Switch TTL to 5m
+      mockAgent.config.featureValues = {
+        [CLAUDE_CACHE_WARM_FEATURE_ID]: true,
+        prompt_cache_ttl: "5m",
+      };
+      manager.onTtlChanged(mockAgent.id);
+
+      // 5m cache window has already passed 10m ago -> cancel without rescheduling
+      expect(manager.hasPending(mockAgent.id)).toBe(false);
+    });
   });
 });

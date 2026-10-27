@@ -8,6 +8,7 @@ import {
   DEFAULT_CACHE_WARM_MAX_PINGS,
   SUBAGENT_CACHE_WARM_MAX_PINGS,
   resolvePromptCacheWindows,
+  resolveDefaultCacheWarmEnabled,
   isCacheWarmPrompt,
   isCacheWarmReply,
   isClaudeModel,
@@ -30,6 +31,7 @@ export {
   DEFAULT_CACHE_WARM_MAX_PINGS,
   SUBAGENT_CACHE_WARM_MAX_PINGS,
   resolvePromptCacheWindows,
+  resolveDefaultCacheWarmEnabled,
   isCacheWarmPrompt,
   isCacheWarmReply,
   isQuestionPermission,
@@ -153,7 +155,23 @@ export class AgentCacheWarmManager {
     if (!isClaudeModel(modelId)) {
       return false;
     }
-    return agent.config.featureValues?.[CLAUDE_CACHE_WARM_FEATURE_ID] === true;
+    const isSubagent = getParentAgentIdFromLabels(agent.labels) !== null;
+    const promptCacheTtl = agent.config.featureValues?.[CLAUDE_PROMPT_CACHE_TTL_FEATURE_ID];
+    const defaultEnabled = resolveDefaultCacheWarmEnabled({ isSubagent, promptCacheTtl });
+    const explicitValue = agent.config.featureValues?.[CLAUDE_CACHE_WARM_FEATURE_ID];
+    if (typeof explicitValue === "boolean") {
+      return explicitValue;
+    }
+    return defaultEnabled;
+  }
+
+  onTtlChanged(agentId: string): void {
+    if (!this.isFeatureEnabled(agentId)) {
+      this.cancel(agentId);
+      return;
+    }
+    this.setConsecutivePings(agentId, 0);
+    this.schedule(agentId);
   }
 
   onFeatureToggled(agentId: string, enabled: boolean): void {
@@ -231,6 +249,8 @@ export class AgentCacheWarmManager {
       return false;
     }
 
+    this.cancelTimerOnly(agentId);
+
     const pendingQuestions = this.getPendingQuestions(agent);
     const hasPendingQuestions = pendingQuestions.length > 0;
     const hasOtherPendingPermissions =
@@ -275,7 +295,6 @@ export class AgentCacheWarmManager {
     const intervalMs = resolveAgentCacheWarmIntervalMs(agent, this.configuredIntervalMs);
     const remainingMs = Math.max(0, intervalMs - elapsedMs);
 
-    this.cancelTimerOnly(agentId);
     const scheduledEpoch = this.nextEpoch(agentId);
 
     this.logger.debug(

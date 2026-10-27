@@ -15,6 +15,20 @@ export const SUBAGENT_CACHE_WARM_INTERVAL_MS = 4 * 60 * 1000;
 export const DEFAULT_CACHE_WARM_MAX_PINGS = 12;
 export const SUBAGENT_CACHE_WARM_MAX_PINGS = 10;
 
+export function isFiveMinuteCacheWindow(input: {
+  isSubagent: boolean;
+  promptCacheTtl?: unknown;
+}): boolean {
+  return input.promptCacheTtl === "5m" || (input.isSubagent && input.promptCacheTtl !== "1h");
+}
+
+export function resolveDefaultCacheWarmEnabled(input: {
+  isSubagent: boolean;
+  promptCacheTtl?: unknown;
+}): boolean {
+  return isFiveMinuteCacheWindow(input);
+}
+
 export function resolvePromptCacheWindows(input: {
   isSubagent: boolean;
   promptCacheTtl?: unknown;
@@ -23,8 +37,7 @@ export function resolvePromptCacheWindows(input: {
   warmIntervalMs: number;
   maxConsecutivePings: number;
 } {
-  const isFiveMinuteWindow =
-    input.promptCacheTtl === "5m" || (input.isSubagent && input.promptCacheTtl !== "1h");
+  const isFiveMinuteWindow = isFiveMinuteCacheWindow(input);
   return {
     cacheWindowMs: isFiveMinuteWindow
       ? FIVE_MINUTE_CACHE_WARM_WINDOW_MS
