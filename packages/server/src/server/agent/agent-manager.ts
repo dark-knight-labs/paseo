@@ -888,10 +888,14 @@ export class AgentManager {
 
   setRateLimitCooldown(agentId: string, cooldown: AgentRateLimitCooldownPayload | null): void {
     const agent = this.agents.get(agentId);
-    if (agent) {
-      agent.rateLimitCooldown = cooldown;
-      this.emitState(agent);
+    // Starting every turn cancels auto-resume, which clears a cooldown that is usually absent.
+    // Publishing then sends an idle snapshot that lands after turn_started and flickers the
+    // running indicator, so a no-op clear publishes nothing.
+    if (!agent || (cooldown === null && !agent.rateLimitCooldown)) {
+      return;
     }
+    agent.rateLimitCooldown = cooldown;
+    this.emitState(agent);
   }
 
   registerClient(provider: AgentProvider, client: AgentClient): void {
