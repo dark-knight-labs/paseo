@@ -1,6 +1,11 @@
 export const DEFAULT_CACHE_WARM_PING_PROMPT =
   "AFK for a bit, keeping you alive. Reply with 'ok' only.";
 
+export const CACHE_WARM_QUESTION_PAUSE_MESSAGE =
+  "The user is temporarily away (AFK). This question was automatically paused to preserve the prompt cache. Stand by and do not perform any other actions. When the user returns and sends a message:\n" +
+  "- If the user provides the answer to the question directly, proceed using their answer.\n" +
+  "- Otherwise (e.g. they say 'I am back', 'continue', 'ready', etc.), immediately call AskUserQuestion again with the exact question and options so they can answer.";
+
 export const DEFAULT_CACHE_WARM_WINDOW_MS = 60 * 60 * 1000;
 export const FIVE_MINUTE_CACHE_WARM_WINDOW_MS = 5 * 60 * 1000;
 
@@ -58,4 +63,11 @@ export function isClaudeModel(modelId: string | null | undefined): boolean {
   }
   const stripped = bareModel.replace(/^(?:us|eu|asia|ap)\.anthropic\./, "");
   return stripped.startsWith("claude");
+}
+
+export function isQuestionPermission(permission: {
+  kind?: string | null;
+  name?: string | null;
+}): boolean {
+  return permission.kind === "question" || permission.name === "AskUserQuestion";
 }

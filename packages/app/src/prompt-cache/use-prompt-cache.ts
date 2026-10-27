@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { isDelegatedAgent } from "@getpaseo/protocol/agent-labels";
-import { resolvePromptCacheWindows, isClaudeModel } from "@getpaseo/protocol/agent-cache-warm";
+import {
+  resolvePromptCacheWindows,
+  isClaudeModel,
+  isQuestionPermission,
+} from "@getpaseo/protocol/agent-cache-warm";
 import { useHostRuntimeClient } from "@/runtime/host-runtime";
 import { useSessionStore, type Agent } from "@/stores/session-store";
 
@@ -133,7 +137,7 @@ function resolveAgentCacheFlags(agent: Agent | null | undefined) {
     agent.features?.some((f) => f.id === "cache_warm" && f.value === true) ?? false;
   const pending = agent.pendingPermissions ?? [];
   const hasPendingPermissions = pending.length > 0;
-  const hasPendingQuestion = pending.some((p) => p.kind === "question");
+  const hasPendingQuestion = pending.some((p) => isQuestionPermission(p));
   const isBusy =
     (agent.status === "running" || agent.turn?.phase === "open") && !hasPendingPermissions;
 
