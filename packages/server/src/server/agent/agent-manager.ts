@@ -4820,6 +4820,10 @@ export class AgentManager {
         this.runs.settleTerminalRun(agent.id, eventTurnId);
         if (isForegroundEvent) {
           this.finalizeForegroundTurn(agent, eventTurnId);
+        } else {
+          // The terminal handler published idle while this autonomous run was still tracked,
+          // so cache warm-up saw an in-flight run and declined. Ask again now it has settled.
+          this.cacheWarmManager?.schedule(agent.id);
         }
       }
 
