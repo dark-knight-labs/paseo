@@ -5827,7 +5827,7 @@ export class AgentManager {
         PASEO_AGENT_ID: agentId,
         PASEO_AGENT_CWD: cwd,
       },
-      isSubagent: opening?.isSubagent,
+      ...(opening?.isSubagent ? { isSubagent: true } : {}),
     };
     if (
       this.paseoToolsEnabled &&
