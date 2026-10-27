@@ -239,11 +239,6 @@ export class AgentCacheWarmManager {
     return { scheduledFor: entry.scheduledFor };
   }
 
-  isFeatureEnabled(agentId: string): boolean {
-    const view = this.viewAgent(agentId);
-    return view !== null && resolveCacheWarmWindows(view) !== null;
-  }
-
   onTtlChanged(agentId: string): void {
     this.resetConsecutivePings(agentId);
     this.schedule(agentId);
