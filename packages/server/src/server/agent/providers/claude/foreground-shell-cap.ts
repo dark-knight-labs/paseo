@@ -36,8 +36,9 @@ function deny(reason: string): HookJSONOutput {
 /**
  * Denies a foreground shell call whose timeout outlasts the session's prompt cache, so the
  * cache cannot expire unseen while the agent waits. Background calls stay uncapped. A deny,
- * not a clamp: Claude Code clamps silently, and the model would never learn why its command
- * stopped. Input the hook cannot read is denied too, since an unread timeout is an unchecked one.
+ * not a clamp: Claude Code shortens a requested timeout silently, and a call that reaches its
+ * timeout is moved to the background or stopped, so the model never sees a refusal naming the
+ * cap. Input the hook cannot read is denied too, since an unread timeout is an unchecked one.
  */
 export function decideForegroundShellCap(input: {
   hookInput: unknown;
