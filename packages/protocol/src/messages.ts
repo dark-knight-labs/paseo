@@ -922,11 +922,23 @@ const PromptCacheRequestSampleSchema = z.object({
   writeTtl: z.enum(["5m", "1h"]).optional(),
 });
 
+const PromptCacheHistoryEntrySchema = z.object({
+  at: z.string(),
+  kind: z.enum(["turn", "request", "warm-up"]),
+  readTokens: z.number(),
+  writeTokens: z.number(),
+  uncachedTokens: z.number(),
+  gapMs: z.number().nullable(),
+  awayMs: z.number().optional(),
+});
+
 export const AgentPromptCacheStateSchema = z.object({
   lastRequest: PromptCacheRequestSampleSchema,
   turnFirstRequest: PromptCacheRequestSampleSchema,
   observedTtl: z.enum(["5m", "1h"]).optional(),
   questionClosedAt: z.string().optional(),
+  lastActivityAt: z.string().optional(),
+  history: z.array(PromptCacheHistoryEntrySchema).optional(),
 });
 
 export const AgentRateLimitCooldownPayloadSchema = z.object({
