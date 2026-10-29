@@ -20,6 +20,10 @@ export const FIVE_MINUTE_CACHE_WARM_MAX_PINGS = 10;
 
 export type PromptCacheTtl = "5m" | "1h";
 
+/** Claude agent feature ids that carry the Cache window and the warm-up toggle. */
+export const PROMPT_CACHE_TTL_FEATURE_ID = "prompt_cache_ttl";
+export const CACHE_WARM_FEATURE_ID = "cache_warm";
+
 /**
  * Longest foreground shell call Paseo lets a Claude agent make, per cache TTL. A main-thread
  * request can only refresh the cache once the call returns, so the 5m cap leaves the time the
@@ -58,7 +62,7 @@ export function resolvePromptCacheWindows(promptCacheTtl: unknown): PromptCacheW
   return isPromptCacheTtl(promptCacheTtl) ? PROMPT_CACHE_WINDOWS[promptCacheTtl] : null;
 }
 
-function isPromptCacheTtl(value: unknown): value is PromptCacheTtl {
+export function isPromptCacheTtl(value: unknown): value is PromptCacheTtl {
   return value === "5m" || value === "1h";
 }
 

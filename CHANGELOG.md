@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- Fixed the Cache warm-up toggle never appearing when you create a new workspace or agent. Picking a 5 minute or 1 hour Cache window now shows it straight away.
+
 ### Added
 
+- Added Cache window and Cache warm-up to the schedule form for Claude models, on create and edit. A new schedule starts from the Cache window you last chose for a new agent.
 - Added a request history to the prompt cache popover. Each of the latest 60 Claude API requests is a bar showing how much of its input came from the cache, with turn starts and warm-ups marked. Beside it are counts of hits overall, after time away, and for warm-ups, misses split into after expiry and while warm, and how your last return went, for example `23m away · 5 warm-ups · 99% cached`.
 
 ## 0.11.914 - 2026-10-27
