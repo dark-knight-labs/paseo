@@ -1900,7 +1900,7 @@ export class VoiceAssistantWebSocketServer {
         ...(this.workspaceLabelService ? { workspaceLabels: true } : {}),
         // COMPAT(workspaceSetupRun): added in v0.7.3, remove gate after 2027-09-02.
         workspaceSetupRun: true,
-        // COMPAT(scheduleFeatureValues): added in v0.11.915, remove gate after 2027-04-29.
+        // COMPAT(scheduleFeatureValues): added in v0.11.916, remove gate after 2027-04-29.
         scheduleFeatureValues: true,
         // COMPAT(providersSnapshot): keep optional until all clients rely on snapshot flow.
         providersSnapshot: true,

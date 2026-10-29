@@ -87,7 +87,8 @@ const ScheduleUpdateNewAgentConfigSchema = z.object({
   archiveOnFinish: z.boolean().optional(),
   isolation: z.enum(["local", "worktree"]).optional(),
   cwd: z.string().trim().min(1).optional(),
-  // COMPAT(scheduleFeatureValues): older daemons strip this; clients gate it on the feature.
+  // COMPAT(scheduleFeatureValues): added in v0.11.916, remove gate after 2027-04-29. Older
+  // daemons strip this field, so clients send it only when the feature is advertised.
   featureValues: z.record(z.string(), z.unknown()).optional(),
 });
 

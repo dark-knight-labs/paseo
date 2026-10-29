@@ -3965,7 +3965,7 @@ export const ServerInfoStatusPayloadSchema = z
         workspaceSetupRun: z.boolean().optional(),
         // COMPAT(workspaceTerminals): added in v0.8.0, remove gate after 2027-09-05.
         workspaceTerminals: z.boolean().optional(),
-        // COMPAT(scheduleFeatureValues): added in v0.11.915, remove gate after 2027-04-29.
+        // COMPAT(scheduleFeatureValues): added in v0.11.916, remove gate after 2027-04-29.
         scheduleFeatureValues: z.boolean().optional(),
         // COMPAT(checkoutForgeSetAutoMerge): added in v0.2.0-beta.1. Remove the
         // feature gate and checkoutGithubSetAutoMerge fallback after 2027-01-17
