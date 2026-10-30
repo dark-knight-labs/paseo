@@ -5,7 +5,7 @@ export type HistoryStartPaginationState =
   | { status: "ready" }
   | { status: "loading"; requestedProgressKey: string; requestObserved: boolean }
   | { status: "settling"; loadedProgressKey: string }
-  | { status: "latched" };
+  | { status: "latched"; progressKey: string | null };
 
 export interface HistoryStartPaginationInput {
   distanceFromHistoryStart: number;
@@ -46,7 +46,23 @@ export function abandonHistoryStartPaginationRequest(
   ) {
     return state;
   }
-  return { status: "latched" };
+  return { status: "latched", progressKey: requestedProgressKey };
+}
+
+// Content that fits the viewport cannot be scrolled, and Android delivers no drag events for
+// it, so a list waiting for scroll intent would wait forever. A latch only means no progress at
+// the position it was set, so new history (a fresh tail after the cached one) lifts it.
+function awaitsScrollIntent(
+  state: HistoryStartPaginationState,
+  input: HistoryStartPaginationInput,
+): boolean {
+  if (state.status === "dormant") {
+    return !input.contentFitsViewport;
+  }
+  if (state.status === "latched") {
+    return !input.contentFitsViewport || input.progressKey === state.progressKey;
+  }
+  return false;
 }
 
 function evaluateLoadingHistoryStart(
@@ -63,14 +79,14 @@ function evaluateLoadingHistoryStart(
     return { state: { ...state, requestObserved: true }, shouldLoad: false };
   }
   if (!input.isLoadingOlderHistory && !input.hasOlderHistory) {
-    return { state: { status: "latched" }, shouldLoad: false };
+    return { state: { status: "latched", progressKey: input.progressKey }, shouldLoad: false };
   }
   if (
     state.requestObserved &&
     !input.isLoadingOlderHistory &&
     input.progressKey === state.requestedProgressKey
   ) {
-    return { state: { status: "latched" }, shouldLoad: false };
+    return { state: { status: "latched", progressKey: input.progressKey }, shouldLoad: false };
   }
   return { state, shouldLoad: false };
 }
@@ -79,9 +95,7 @@ export function evaluateHistoryStartPagination(
   state: HistoryStartPaginationState,
   input: HistoryStartPaginationInput,
 ): HistoryStartPaginationTransition {
-  // Content that fits the viewport cannot be scrolled, and Android delivers no
-  // drag events for it, so there is no scroll intent to wait for.
-  if (state.status === "dormant" && !input.contentFitsViewport) {
+  if (state.status === "dormant" && awaitsScrollIntent(state, input)) {
     return { state, shouldLoad: false };
   }
   if (state.status === "loading") {
@@ -99,7 +113,7 @@ export function evaluateHistoryStartPagination(
       : { state: { status: "ready" }, shouldLoad: false };
   }
   if (
-    state.status === "latched" ||
+    awaitsScrollIntent(state, input) ||
     !input.isReady ||
     !input.hasOlderHistory ||
     input.isLoadingOlderHistory ||
@@ -133,7 +147,9 @@ export function settleHistoryStartPagination(
     input.progressKey === null
   ) {
     return {
-      state: isAtHistoryStart ? { status: "latched" } : { status: "ready" },
+      state: isAtHistoryStart
+        ? { status: "latched", progressKey: input.progressKey }
+        : { status: "ready" },
       shouldLoad: false,
     };
   }

@@ -59,6 +59,30 @@ describe("history start pagination", () => {
     });
   });
 
+  it("loads again when a latch was set at an older position and the content cannot scroll", () => {
+    const localTail = { ...visibleHistoryStart, contentFitsViewport: true, progressKey: "local:0" };
+    const localReveal = evaluateHistoryStartPagination(createHistoryStartPaginationState(), {
+      ...localTail,
+      progressKey: "local:20",
+    });
+    const exhausted = settleHistoryStartPagination(
+      evaluateHistoryStartPagination(localReveal.state, localTail).state,
+      { ...localTail, hasOlderHistory: false },
+    );
+    const sameKey = evaluateHistoryStartPagination(exhausted.state, localTail);
+    const remoteTail = evaluateHistoryStartPagination(exhausted.state, {
+      ...localTail,
+      progressKey: "epoch-1:87:0",
+    });
+
+    expect(exhausted.state.status).toBe("latched");
+    expect(sameKey.shouldLoad).toBe(false);
+    expect(remoteTail).toEqual({
+      state: { status: "loading", requestedProgressKey: "epoch-1:87:0", requestObserved: false },
+      shouldLoad: true,
+    });
+  });
+
   it("waits for anchored page geometry before authorizing another page", () => {
     const first = evaluateHistoryStartPagination(
       createArmedHistoryStartPaginationState(),
@@ -145,7 +169,7 @@ describe("history start pagination", () => {
       distanceFromHistoryStart: 300,
     });
 
-    expect(finished.state).toEqual({ status: "latched" });
+    expect(finished.state).toEqual({ status: "latched", progressKey: "epoch-1:20" });
     expect([finished.shouldLoad, duplicate.shouldLoad, away.shouldLoad]).toEqual([
       false,
       false,
@@ -169,7 +193,7 @@ describe("history start pagination", () => {
       visibleHistoryStart,
     );
 
-    expect(failed.state).toEqual({ status: "latched" });
+    expect(failed.state).toEqual({ status: "latched", progressKey: "epoch-1:20" });
     expect(retried.shouldLoad).toBe(true);
   });
 
@@ -181,6 +205,7 @@ describe("history start pagination", () => {
 
     expect(abandonHistoryStartPaginationRequest(requested.state, "epoch-1:20")).toEqual({
       status: "latched",
+      progressKey: "epoch-1:20",
     });
   });
 
