@@ -177,10 +177,8 @@ describe("PromptCachePill", () => {
       claudeAgent({ ttl: "default", promptCache: promptCacheAt(NOW) }),
     );
     expect(getByText("cache · auto")).toBeTruthy();
-    expect(getByText("Automatic")).toBeTruthy();
-    expect(
-      getByText("Choose 5 minutes or 1 hour under Cache window to use auto warm-up."),
-    ).toBeTruthy();
+    expect(getByText("Auto")).toBeTruthy();
+    expect(getByText("Choose 5m or 1h under Cache window to use auto warm-up.")).toBeTruthy();
     expect(queryByTestId("prompt-cache-toggle-warmup-button")).toBeNull();
   });
 
@@ -258,7 +256,7 @@ describe("PromptCachePill", () => {
     const { getByText } = renderPill(
       claudeAgent({ ttl: "default", promptCache: { ...promptCacheAt(NOW), observedTtl: "1h" } }),
     );
-    expect(getByText("Automatic · 1 hour")).toBeTruthy();
+    expect(getByText("Auto · 1h")).toBeTruthy();
   });
 
   it("shows a capped segment with the time the cache has left", () => {
