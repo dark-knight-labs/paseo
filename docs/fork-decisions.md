@@ -884,3 +884,13 @@ npx vitest run packages/server/src/server/schedule/service.test.ts -t "feature v
 grep -q "CLAUDE_CACHE_WARM_FEATURE_ID" packages/server/src/server/agent/providers/claude/feature-definitions.ts
 grep -q "CACHE_WARM_FEATURE_ID" packages/app/src/agent-controls/policy.ts
 ```
+
+## short-history-autoload
+
+**load older history when the chat is too short to scroll**
+
+History-start pagination starts dormant and waits for scroll intent, so opening an agent does not walk its history. When the rendered tail fits the viewport there is nothing to scroll, and Android delivers no drag events to an unscrollable list, so the chat stayed stuck on its tail. Ten cache warm-ups in a row do this: each renders one `CacheWarmedMarker` row and hides its reply. `contentFitsViewport` lets a dormant list load without intent; the existing settle loop then keeps loading until the content overflows or history runs out.
+
+```bash
+npm --prefix packages/app run test -- src/agent-stream/history-start-pagination.test.ts -t "too short to scroll"
+```

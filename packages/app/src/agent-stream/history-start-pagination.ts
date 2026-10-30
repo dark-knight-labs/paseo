@@ -9,6 +9,7 @@ export type HistoryStartPaginationState =
 
 export interface HistoryStartPaginationInput {
   distanceFromHistoryStart: number;
+  contentFitsViewport: boolean;
   hasOlderHistory: boolean;
   isLoadingOlderHistory: boolean;
   isReady: boolean;
@@ -48,34 +49,43 @@ export function abandonHistoryStartPaginationRequest(
   return { status: "latched" };
 }
 
+function evaluateLoadingHistoryStart(
+  state: Extract<HistoryStartPaginationState, { status: "loading" }>,
+  input: HistoryStartPaginationInput,
+): HistoryStartPaginationTransition {
+  if (input.progressKey !== null && input.progressKey !== state.requestedProgressKey) {
+    return {
+      state: { status: "settling", loadedProgressKey: input.progressKey },
+      shouldLoad: false,
+    };
+  }
+  if (input.isLoadingOlderHistory && !state.requestObserved) {
+    return { state: { ...state, requestObserved: true }, shouldLoad: false };
+  }
+  if (!input.isLoadingOlderHistory && !input.hasOlderHistory) {
+    return { state: { status: "latched" }, shouldLoad: false };
+  }
+  if (
+    state.requestObserved &&
+    !input.isLoadingOlderHistory &&
+    input.progressKey === state.requestedProgressKey
+  ) {
+    return { state: { status: "latched" }, shouldLoad: false };
+  }
+  return { state, shouldLoad: false };
+}
+
 export function evaluateHistoryStartPagination(
   state: HistoryStartPaginationState,
   input: HistoryStartPaginationInput,
 ): HistoryStartPaginationTransition {
-  if (state.status === "dormant") {
+  // Content that fits the viewport cannot be scrolled, and Android delivers no
+  // drag events for it, so there is no scroll intent to wait for.
+  if (state.status === "dormant" && !input.contentFitsViewport) {
     return { state, shouldLoad: false };
   }
   if (state.status === "loading") {
-    if (input.progressKey !== null && input.progressKey !== state.requestedProgressKey) {
-      return {
-        state: { status: "settling", loadedProgressKey: input.progressKey },
-        shouldLoad: false,
-      };
-    }
-    if (input.isLoadingOlderHistory && !state.requestObserved) {
-      return { state: { ...state, requestObserved: true }, shouldLoad: false };
-    }
-    if (!input.isLoadingOlderHistory && !input.hasOlderHistory) {
-      return { state: { status: "latched" }, shouldLoad: false };
-    }
-    if (
-      state.requestObserved &&
-      !input.isLoadingOlderHistory &&
-      input.progressKey === state.requestedProgressKey
-    ) {
-      return { state: { status: "latched" }, shouldLoad: false };
-    }
-    return { state, shouldLoad: false };
+    return evaluateLoadingHistoryStart(state, input);
   }
 
   if (state.status === "settling") {

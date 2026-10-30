@@ -44,8 +44,10 @@ recovery is complete only when `hasNewer: false`.
 
 Initialization timeouts guard lack of catch-up progress, not the full multi-page sync. A successful page that queues the next `after` page refreshes the watchdog.
 
-Opening or resuming an agent fetches one bounded latest tail page. Older history remains
-user-driven by scrolling upward.
+Opening or resuming an agent fetches one bounded latest tail page. Older history loads when the
+user scrolls upward, or without a gesture when the rendered tail is too short to scroll. A tail of
+hidden or one-line rows, such as consecutive cache warm-ups, can leave the list unscrollable, and
+Android delivers no drag events to an unscrollable list, so waiting for scroll intent strands it.
 
 A failed catch-up or subscription reconcile retries on its own, doubling from 1s to a 30s ceiling.
 A fixed 1s retry turned a persistent daemon-side refusal — a Codex thread that already has an active

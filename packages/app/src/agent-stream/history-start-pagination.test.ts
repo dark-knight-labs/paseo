@@ -15,6 +15,7 @@ function createArmedHistoryStartPaginationState() {
 
 const visibleHistoryStart: HistoryStartPaginationInput = {
   distanceFromHistoryStart: 0,
+  contentFitsViewport: false,
   hasOlderHistory: true,
   isLoadingOlderHistory: false,
   isReady: true,
@@ -43,6 +44,19 @@ describe("history start pagination", () => {
     const evaluated = evaluateHistoryStartPagination(dormant, visibleHistoryStart);
 
     expect(evaluated).toEqual({ state: { status: "dormant" }, shouldLoad: false });
+  });
+
+  it("loads without scroll intent when the content is too short to scroll", () => {
+    const dormant = createHistoryStartPaginationState();
+    const evaluated = evaluateHistoryStartPagination(dormant, {
+      ...visibleHistoryStart,
+      contentFitsViewport: true,
+    });
+
+    expect(evaluated).toEqual({
+      state: { status: "loading", requestedProgressKey: "epoch-1:20", requestObserved: false },
+      shouldLoad: true,
+    });
   });
 
   it("waits for anchored page geometry before authorizing another page", () => {
