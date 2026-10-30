@@ -172,7 +172,7 @@ describe("PromptCachePill", () => {
     expect(queryByTestId("prompt-cache-pill")).toBeNull();
   });
 
-  it("shows Automatic with no warm-up controls", () => {
+  it("shows Auto with no warm-up controls", () => {
     const { getByText, queryByTestId } = renderPill(
       claudeAgent({ ttl: "default", promptCache: promptCacheAt(NOW) }),
     );
@@ -252,7 +252,7 @@ describe("PromptCachePill", () => {
     expect(getByText("Expired during this turn · the next request writes it again")).toBeTruthy();
   });
 
-  it("names the window Claude Code picked under Automatic once a write shows it", () => {
+  it("names the window Claude Code picked under Auto once a write shows it", () => {
     const { getByText } = renderPill(
       claudeAgent({ ttl: "default", promptCache: { ...promptCacheAt(NOW), observedTtl: "1h" } }),
     );
