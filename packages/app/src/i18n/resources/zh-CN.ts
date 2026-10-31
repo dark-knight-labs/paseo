@@ -99,6 +99,7 @@ export const zhCN: TranslationResources = {
       home: "首页",
       groupByProject: "按项目分组",
       groupByStatus: "按状态分组",
+      groupByFolder: "按文件夹分组",
       modelGroupLabel: "模型",
       modelSearchKeywords: "切换模型 更改模型 设置模型 选择模型",
       thinkingGroupLabel: "思考",
@@ -1207,6 +1208,7 @@ export const zhCN: TranslationResources = {
   },
   sidebar: {
     statusGroupAccessibility: "{{label}} 分组",
+    folderOther: "其他",
     statusBucket: {
       needsInput: "需要输入",
       failed: "失败",
@@ -1221,6 +1223,7 @@ export const zhCN: TranslationResources = {
         label: "分组",
         project: "项目",
         status: "状态",
+        folder: "文件夹",
         labels: "标签",
       },
       titleSource: {

@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { buildFolderGroups } from "@/hooks/sidebar-folder-view-model";
 import { buildStatusGroups } from "@/hooks/sidebar-status-view-model";
 import {
   splitPinnedSidebarGroups,
@@ -19,7 +20,11 @@ import {
   type SidebarShortcutModel,
   type SidebarShortcutSection,
 } from "@/utils/sidebar-shortcuts";
-import { statusWorkspaceGroups, type SidebarWorkspaceGroup } from "./sidebar-labels";
+import {
+  folderWorkspaceGroups,
+  statusWorkspaceGroups,
+  type SidebarWorkspaceGroup,
+} from "./sidebar-labels";
 
 export interface SidebarProjection {
   pinnedGroups: PinnedSidebarGroups;
@@ -92,7 +97,7 @@ export function buildSidebarProjection(input: SidebarProjectionInput): SidebarPr
   };
 }
 
-/** Project mode keeps its project headers and groups nothing; status mode groups the rows. */
+/** Project mode keeps its project headers and groups nothing; status and folder modes group the rows. */
 function buildWorkspaceGroups(
   input: SidebarProjectionInput,
   unpinnedWorkspaces: SidebarWorkspaceEntry[],
@@ -104,5 +109,7 @@ function buildWorkspaceGroups(
       return statusWorkspaceGroups(
         buildStatusGroups(unpinnedWorkspaces, input.projectNamesByViewKey, input.t),
       );
+    case "folder":
+      return folderWorkspaceGroups(buildFolderGroups(unpinnedWorkspaces, input.t));
   }
 }

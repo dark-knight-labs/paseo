@@ -2,12 +2,13 @@ import { workspaceLabelKey } from "@getpaseo/protocol/workspace-labels";
 import type { SidebarWorkspaceEntry } from "@/hooks/use-sidebar-workspaces-list";
 import { SIDEBAR_UNLABELLED_LABEL_KEY, type SidebarLabelFilter } from "@/stores/sidebar-view-store";
 import type { StatusBucket, StatusGroup } from "@/hooks/sidebar-status-view-model";
+import type { FolderGroup } from "@/hooks/sidebar-folder-view-model";
 
 export interface SidebarWorkspaceGroup {
   key: string;
   label: string;
   rows: SidebarWorkspaceEntry[];
-  leading: { kind: "status"; bucket: StatusBucket };
+  leading: { kind: "status"; bucket: StatusBucket } | { kind: "folder" };
 }
 
 export function statusWorkspaceGroups(groups: readonly StatusGroup[]): SidebarWorkspaceGroup[] {
@@ -16,6 +17,17 @@ export function statusWorkspaceGroups(groups: readonly StatusGroup[]): SidebarWo
     label: group.label,
     rows: group.rows,
     leading: { kind: "status", bucket: group.bucket },
+  }));
+}
+
+export function folderWorkspaceGroups(groups: readonly FolderGroup[]): SidebarWorkspaceGroup[] {
+  return groups.map((group) => ({
+    // Prefixed so a folder can never share a collapse key with a status bucket; the fallback
+    // folder has no colon, so no folder name can collide with it.
+    key: group.id === "other" ? "folder" : `folder:${group.id}`,
+    label: group.label,
+    rows: group.rows,
+    leading: { kind: "folder" },
   }));
 }
 

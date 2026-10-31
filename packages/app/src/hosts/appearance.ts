@@ -62,7 +62,8 @@ export type HostAppearanceSource = Pick<HostProfile, "serverId" | "label" | "app
 /**
  * The sidebar's whole host-badge decision, resolved once per host list. Rows look their
  * badge up by serverId and render whatever they find; a host that should show no badge is
- * simply absent from the map.
+ * simply absent from the map. A single host gets a badge like any other: how many hosts the
+ * sidebar spans is not a gate.
  */
 export function selectHostBadges(input: {
   hosts: readonly HostAppearanceSource[];
