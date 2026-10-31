@@ -81,13 +81,44 @@ describe("resolveHostBadgeDisplay", () => {
 });
 
 describe("selectHostBadges", () => {
-  it("shows no badges while the sidebar spans a single host", () => {
+  it("shows no badges while Show -> Host is off", () => {
     const badges = selectHostBadges({
       hosts: [host("alpha", "Alpha"), host("beta", "Beta")],
       localServerId: null,
       enabled: false,
     });
     expect(badges.size).toBe(0);
+  });
+
+  it("draws the badge for a single connected remote host", () => {
+    const badges = selectHostBadges({
+      hosts: [host("alpha", "Alpha")],
+      localServerId: null,
+      enabled: true,
+    });
+    expect(badges.get("alpha")).toEqual({
+      serverId: "alpha",
+      label: "Alpha",
+      color: "none",
+      showLabel: true,
+      showIcon: true,
+    });
+  });
+
+  it("keeps a single host's own display mode: hidden stays hidden, icon-only drops the label", () => {
+    const hidden = selectHostBadges({
+      hosts: [host("alpha", "Alpha", { color: "none", badgeDisplay: "hidden" })],
+      localServerId: null,
+      enabled: true,
+    });
+    expect(hidden.size).toBe(0);
+
+    const iconOnly = selectHostBadges({
+      hosts: [host("alpha", "Alpha", { color: "none", badgeDisplay: "icon" })],
+      localServerId: null,
+      enabled: true,
+    });
+    expect(iconOnly.get("alpha")?.showLabel).toBe(false);
   });
 
   it("omits a host the user hid and keeps its sibling", () => {
