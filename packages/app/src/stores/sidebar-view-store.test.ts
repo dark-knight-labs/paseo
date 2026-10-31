@@ -119,6 +119,19 @@ describe("sidebar view store", () => {
     });
   });
 
+  it("keeps the folder group mode through migration", () => {
+    expect(migrateSidebarViewState({ groupMode: "folder", hostFilters: ["host-a"] })).toEqual({
+      groupMode: "folder",
+      hostFilters: ["host-a"],
+      projectFilters: [],
+      labelFilter: { labels: [] },
+    });
+  });
+
+  it("still maps the retired label mode to project", () => {
+    expect(migrateSidebarViewState({ groupMode: "label" }).groupMode).toBe("project");
+  });
+
   it("clears only the label facet", () => {
     useSidebarViewStore.setState({
       groupMode: "status",

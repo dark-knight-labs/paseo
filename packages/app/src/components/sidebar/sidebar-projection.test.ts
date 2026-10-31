@@ -12,13 +12,14 @@ function makeWorkspace(
   statusBucket: SidebarWorkspaceEntry["statusBucket"] = "done",
   labels: string[] = [],
   projectViewKey = "project",
+  projectName = "Project",
 ) {
   const placement: SidebarWorkspacePlacement = {
     workspaceKey: `srv:${id}`,
     serverId: "srv",
     workspaceId: id,
     projectViewKey,
-    projectName: "Project",
+    projectName,
     projectKind: "git",
     workspaceKind: "worktree",
     name: id,
@@ -65,7 +66,7 @@ function makeProject(
 }
 
 function projectionInput(options?: {
-  groupMode?: "project" | "status";
+  groupMode?: "project" | "status" | "folder";
   pinnedCollapsed?: boolean;
 }) {
   const pinned = makeWorkspace("pinned", "running");
@@ -173,6 +174,32 @@ describe("buildSidebarProjection", () => {
 
     expect(projection.shortcutModel.shortcutTargets).toEqual([
       { serverId: "srv", workspaceId: "unpinned" },
+    ]);
+  });
+
+  it("groups by folder, keys collapse by folder, and walks folders for shortcuts", () => {
+    const kahf = makeWorkspace("a", "done", [], "p-kahf", "kahf · dns");
+    const plain = makeWorkspace("b", "done", [], "p-plain", "scratch");
+    const burak = makeWorkspace("c", "done", [], "p-burak", "burak · hub");
+    const entries = [kahf, plain, burak];
+    const projection = buildSidebarProjection({
+      ...projectionInput({ groupMode: "folder" }),
+      projects: [],
+      pinnedKeys: { pinnedWorkspaceKeys: [], pinnedAtByKey: {} },
+      workspaceEntriesByKey: new Map(entries.map((item) => [item.entry.workspaceKey, item.entry])),
+      collapsedWorkspaceGroupKeys: new Set(["folder:burak"]),
+    });
+
+    expect(projection.workspaceGroups.map((group) => [group.key, group.label])).toEqual([
+      ["folder:burak", "burak"],
+      ["folder:kahf", "kahf"],
+      ["folder", "Other"],
+    ]);
+    expect(projection.workspaceGroups.every((group) => group.leading.kind === "folder")).toBe(true);
+    // The collapsed burak folder contributes no shortcut targets.
+    expect(projection.shortcutModel.shortcutTargets).toEqual([
+      { serverId: "srv", workspaceId: "a" },
+      { serverId: "srv", workspaceId: "b" },
     ]);
   });
 });

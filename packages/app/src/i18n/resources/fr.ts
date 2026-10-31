@@ -100,6 +100,7 @@ export const fr: TranslationResources = {
       home: "Accueil",
       groupByProject: "Grouper par projet",
       groupByStatus: "Grouper par statut",
+      groupByFolder: "Grouper par dossier",
       modelGroupLabel: "Modèle",
       modelSearchKeywords:
         "changer de modèle modifier le modèle définir le modèle sélectionner le modèle model",
@@ -1241,6 +1242,7 @@ export const fr: TranslationResources = {
   },
   sidebar: {
     statusGroupAccessibility: "Groupe {{label}}",
+    folderOther: "Autres",
     statusBucket: {
       needsInput: "Attend une réponse",
       failed: "Échec",
@@ -1255,6 +1257,7 @@ export const fr: TranslationResources = {
         label: "Regroupement",
         project: "Projet",
         status: "Statut",
+        folder: "Dossier",
         labels: "Libellés",
       },
       titleSource: {

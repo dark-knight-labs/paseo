@@ -7,6 +7,7 @@ import { useSidebarViewStore, type SidebarGroupMode } from "@/stores/sidebar-vie
 const OPTIONS: Array<{ value: SidebarGroupMode; label: string; testID: string }> = [
   { value: "project", label: "Project", testID: "sidebar-group-mode-project" },
   { value: "status", label: "Status", testID: "sidebar-group-mode-status" },
+  { value: "folder", label: "Folder", testID: "sidebar-group-mode-folder" },
 ];
 
 interface SidebarGroupModeControlProps {
@@ -16,7 +17,7 @@ interface SidebarGroupModeControlProps {
 }
 
 /**
- * Inline Project | Status control for the Workspaces header row.
+ * Inline Project | Status | Folder control for the Workspaces header row.
  * Gear → Group by remains the always-available fallback.
  */
 export function SidebarGroupModeControl({ visible = true, style }: SidebarGroupModeControlProps) {

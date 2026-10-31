@@ -816,9 +816,9 @@ function DesktopSidebar({
   );
 }
 
-// Below this header width the inline Project|Status control is hidden; Group by
-// remains available in the gear menu. Sized for "Workspaces by [Project|Status] + icons".
-const WORKSPACES_GROUP_MODE_MIN_WIDTH = 300;
+// Below this header width the inline Project|Status|Folder control is hidden; Group by
+// remains available in the gear menu. Sized for "Workspaces by [Project|Status|Folder] + icons".
+const WORKSPACES_GROUP_MODE_MIN_WIDTH = 340;
 
 function WorkspacesSectionHeader() {
   const [showGroupMode, setShowGroupMode] = useState(true);

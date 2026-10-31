@@ -100,6 +100,7 @@ export const ja: TranslationResources = {
       home: "ホーム",
       groupByProject: "プロジェクトでグループ化",
       groupByStatus: "ステータスでグループ化",
+      groupByFolder: "フォルダでグループ化",
       modelGroupLabel: "モデル",
       modelSearchKeywords: "モデルを切り替え モデルを変更 モデルを設定 モデルを選択",
       thinkingGroupLabel: "思考",
@@ -1229,6 +1230,7 @@ export const ja: TranslationResources = {
   },
   sidebar: {
     statusGroupAccessibility: "{{label}} グループ",
+    folderOther: "その他",
     statusBucket: {
       needsInput: "入力待ち",
       failed: "失敗",
@@ -1243,6 +1245,7 @@ export const ja: TranslationResources = {
         label: "グループ化",
         project: "プロジェクト",
         status: "ステータス",
+        folder: "フォルダ",
         labels: "ラベル",
       },
       titleSource: {

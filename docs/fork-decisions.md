@@ -210,12 +210,22 @@ npx vitest run packages/app/src/hosts/appearance.show-icon.test.ts --bail=1
 
 ## workspaces-group-mode
 
-**Workspaces header keeps inline Project|Status grouping**
+**Workspaces header keeps inline Project|Status|Folder grouping**
 
-left-sidebar Workspaces header mounts SidebarGroupModeControl and hides it below 300px; Group by stays in the gear menu
+left-sidebar Workspaces header mounts SidebarGroupModeControl and hides it below 340px; Group by stays in the gear menu. Folder mode files each workspace under the text before the first " · " in its project name ("Other" last when there is none), so client/purpose groups need no daemon data
 
 ```bash
-npx vitest run packages/app/src/components/sidebar/sidebar-group-mode-policy.test.ts --bail=1
+npx vitest run packages/app/src/components/sidebar/sidebar-group-mode-policy.test.ts packages/app/src/hooks/sidebar-folder-view-model.test.ts --bail=1
+```
+
+## host-badge-single-host
+
+**Host badge draws with a single connected host**
+
+Show -> Host is the only global gate; the old "sidebar spans more than one host" gate (`shouldShowSidebarHostLabels`) is removed so a user with one remote server sees its name
+
+```bash
+npx vitest run packages/app/src/hosts/appearance.test.ts --bail=1
 ```
 
 ## pinned-workspace-tabs
