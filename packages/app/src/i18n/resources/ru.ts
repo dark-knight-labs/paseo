@@ -2169,6 +2169,8 @@ export const ru: TranslationResources = {
           html: "HTML",
           image: "Изображение",
           source: "Исходный текст",
+          pdf: "PDF",
+          office: "Документ Office",
         },
       },
       directoryMissing: "Каталог рабочего пространства не найден.",

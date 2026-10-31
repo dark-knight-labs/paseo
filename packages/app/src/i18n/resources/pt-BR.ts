@@ -2167,6 +2167,8 @@ export const ptBR: TranslationResources = {
           html: "HTML",
           image: "Imagem",
           source: "Fonte",
+          pdf: "PDF",
+          office: "Documento do Office",
         },
       },
       directoryMissing: "Diretório do workspace não encontrado.",
