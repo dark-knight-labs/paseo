@@ -11,6 +11,10 @@ function StatusIcon(_props: CommandCenterIconProps) {
   return null;
 }
 
+function FolderIcon(_props: CommandCenterIconProps) {
+  return null;
+}
+
 function source(groupMode: SidebarGroupMode): {
   value: GroupingCommandCenterSource;
   applied: SidebarGroupMode[];
@@ -23,8 +27,9 @@ function source(groupMode: SidebarGroupMode): {
         section: "Actions",
         groupByProject: "Group by project",
         groupByStatus: "Group by status",
+        groupByFolder: "Group by folder",
       },
-      icons: { project: ProjectIcon, status: StatusIcon },
+      icons: { project: ProjectIcon, status: StatusIcon, folder: FolderIcon },
       setGroupMode: (mode) => applied.push(mode),
     },
     applied,
@@ -45,8 +50,21 @@ describe("grouping command center contribution", () => {
     expect(fixture.applied).toEqual(["status"]);
   });
 
-  it("offers project while grouped by status", () => {
+  it("offers folder while grouped by status", () => {
     const fixture = source("status");
+    const contribution = buildGroupingContribution(fixture.value);
+
+    expect(contribution.presentation).toMatchObject({
+      title: "Group by folder",
+      icon: FolderIcon,
+    });
+
+    contribution.run();
+    expect(fixture.applied).toEqual(["folder"]);
+  });
+
+  it("offers project while grouped by folder, closing the cycle", () => {
+    const fixture = source("folder");
     const contribution = buildGroupingContribution(fixture.value);
 
     expect(contribution.presentation).toMatchObject({
@@ -62,10 +80,13 @@ describe("grouping command center contribution", () => {
     expect(buildGroupingContribution(source("project").value).id).toBe(
       buildGroupingContribution(source("status").value).id,
     );
+    expect(buildGroupingContribution(source("project").value).id).toBe(
+      buildGroupingContribution(source("folder").value).id,
+    );
   });
 
   it("stays out of the default empty-query list", () => {
-    for (const mode of ["project", "status"] as const) {
+    for (const mode of ["project", "status", "folder"] as const) {
       const contribution = buildGroupingContribution(source(mode).value);
       expect(contribution.visibility).toBe("query");
       expect(contribution.group).toBe("actions");

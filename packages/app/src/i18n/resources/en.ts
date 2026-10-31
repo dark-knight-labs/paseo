@@ -97,6 +97,7 @@ export const en = {
       home: "Home",
       groupByProject: "Group by project",
       groupByStatus: "Group by status",
+      groupByFolder: "Group by folder",
       modelGroupLabel: "Model",
       modelSearchKeywords: "switch model change model set model select model",
       thinkingGroupLabel: "Thinking",
@@ -1247,6 +1248,7 @@ export const en = {
   },
   sidebar: {
     statusGroupAccessibility: "{{label}} group",
+    folderOther: "Other",
     statusBucket: {
       needsInput: "Needs input",
       failed: "Failed",
@@ -1269,6 +1271,7 @@ export const en = {
         label: "Grouping",
         project: "Project",
         status: "Status",
+        folder: "Folder",
         labels: "Labels",
       },
       titleSource: {

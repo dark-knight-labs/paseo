@@ -6,6 +6,7 @@ import {
   CircleDashed,
   Folder,
   FolderPlus,
+  FolderTree,
   History,
   Home,
   Import,
@@ -56,6 +57,9 @@ const ThemedSettings = withUnistyles(Settings, (theme) => ({
 const ThemedHome = withUnistyles(Home, (theme) => ({ color: theme.colors.foregroundMuted }));
 const ThemedImport = withUnistyles(Import, (theme) => ({ color: theme.colors.foregroundMuted }));
 const ThemedFolder = withUnistyles(Folder, (theme) => ({ color: theme.colors.foregroundMuted }));
+const ThemedFolderTree = withUnistyles(FolderTree, (theme) => ({
+  color: theme.colors.foregroundMuted,
+}));
 const ThemedCircleDashed = withUnistyles(CircleDashed, (theme) => ({
   color: theme.colors.foregroundMuted,
 }));
@@ -97,6 +101,10 @@ function ImportIcon({ size }: CommandCenterIconProps) {
 
 function FolderIcon({ size }: CommandCenterIconProps) {
   return <ThemedFolder size={size} strokeWidth={2.2} />;
+}
+
+function FolderTreeIcon({ size }: CommandCenterIconProps) {
+  return <ThemedFolderTree size={size} strokeWidth={2.2} />;
 }
 
 function CircleDashedIcon({ size }: CommandCenterIconProps) {
@@ -323,8 +331,9 @@ export function CommandCenterRootActions() {
           section: t("shell.commandCenter.actions"),
           groupByProject: t("shell.commandCenter.groupByProject"),
           groupByStatus: t("shell.commandCenter.groupByStatus"),
+          groupByFolder: t("shell.commandCenter.groupByFolder"),
         },
-        icons: { project: FolderIcon, status: CircleDashedIcon },
+        icons: { project: FolderIcon, status: CircleDashedIcon, folder: FolderTreeIcon },
         setGroupMode,
       }),
     );

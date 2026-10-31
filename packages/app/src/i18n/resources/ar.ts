@@ -101,6 +101,7 @@ export const ar: TranslationResources = {
       home: "بيت",
       groupByProject: "تجميع حسب المشروع",
       groupByStatus: "تجميع حسب الحالة",
+      groupByFolder: "تجميع حسب المجلد",
       modelGroupLabel: "النموذج",
       modelSearchKeywords: "تبديل النموذج تغيير النموذج تعيين النموذج اختيار النموذج",
       thinkingGroupLabel: "التفكير",
@@ -1236,6 +1237,7 @@ export const ar: TranslationResources = {
   },
   sidebar: {
     statusGroupAccessibility: "مجموعة {{label}}",
+    folderOther: "أخرى",
     statusBucket: {
       needsInput: "تحتاج إدخالاً",
       failed: "فشل",
@@ -1258,6 +1260,7 @@ export const ar: TranslationResources = {
         label: "التجميع",
         project: "المشروع",
         status: "الحالة",
+        folder: "مجلد",
         labels: "التسميات",
       },
       titleSource: {

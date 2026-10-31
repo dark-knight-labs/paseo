@@ -102,6 +102,7 @@ export const ru: TranslationResources = {
       home: "Главная",
       groupByProject: "Группировать по проекту",
       groupByStatus: "Группировать по статусу",
+      groupByFolder: "Группировать по папке",
       modelGroupLabel: "Модель",
       modelSearchKeywords: "Сменить, изменить, выбрать или установить модель",
       thinkingGroupLabel: "Мышление",
@@ -1253,6 +1254,7 @@ export const ru: TranslationResources = {
   },
   sidebar: {
     statusGroupAccessibility: "Группа «{{label}}»",
+    folderOther: "Прочее",
     statusBucket: {
       needsInput: "Ожидает ввода",
       failed: "Ошибка",
@@ -1275,6 +1277,7 @@ export const ru: TranslationResources = {
         label: "Группировка",
         project: "Проект",
         status: "Статус",
+        folder: "Папка",
         labels: "Метки",
       },
       titleSource: {

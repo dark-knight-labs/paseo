@@ -102,6 +102,7 @@ export const es: TranslationResources = {
       home: "Hogar",
       groupByProject: "Agrupar por proyecto",
       groupByStatus: "Agrupar por estado",
+      groupByFolder: "Agrupar por carpeta",
       modelGroupLabel: "Modelo",
       modelSearchKeywords: "cambiar modelo modificar modelo establecer modelo seleccionar modelo",
       thinkingGroupLabel: "Razonamiento",
@@ -1269,6 +1270,7 @@ export const es: TranslationResources = {
   },
   sidebar: {
     statusGroupAccessibility: "Grupo {{label}}",
+    folderOther: "Otros",
     statusBucket: {
       needsInput: "Necesita datos",
       failed: "Con error",
@@ -1291,6 +1293,7 @@ export const es: TranslationResources = {
         label: "Agrupación",
         project: "Proyecto",
         status: "Estado",
+        folder: "Carpeta",
         labels: "Etiquetas",
       },
       titleSource: {
