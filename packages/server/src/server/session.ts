@@ -94,7 +94,6 @@ import type { ProjectUpdate } from "./workspace-reconciliation-service.js";
 import {
   CLIENT_SHUTDOWN_RPC_REASON,
   normalizeClientRestartRpcReason,
-  isAutomaticDaemonStopReason,
 } from "./lifecycle-reasons.js";
 import { DirectorySyncService } from "./directory-sync/index.js";
 import {
@@ -3192,7 +3191,6 @@ export class Session {
       case "shutdown_server_request":
         return this.handleShutdownServerRequest(msg.requestId, {
           keepTerminals: msg.keepTerminals === true,
-          reason: msg.reason,
         });
       case "client_heartbeat":
         this.handleClientHeartbeat(msg);
@@ -3874,11 +3872,9 @@ export class Session {
 
   private async handleShutdownServerRequest(
     requestId: string,
-    options: { keepTerminals: boolean; reason?: string },
+    options: { keepTerminals: boolean },
   ): Promise<void> {
-    const reason = isAutomaticDaemonStopReason(options.reason)
-      ? options.reason!
-      : CLIENT_SHUTDOWN_RPC_REASON;
+    const reason = CLIENT_SHUTDOWN_RPC_REASON;
     this.sessionLogger.warn(
       { reason, keepTerminals: options.keepTerminals },
       "Shutdown requested via websocket",
