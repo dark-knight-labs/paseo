@@ -19,6 +19,8 @@ export interface StatusRingProps {
   // tab dot, the project tile under a sidebar badge. Leave it out where the ring sits on flat
   // background and has nothing to knock out.
   backdrop?: SurfaceBackdrop | null;
+  // Replaces the default centre dot, e.g. with a glyph naming what is running.
+  center?: ReactNode;
 }
 
 /**
@@ -34,7 +36,7 @@ export function StatusRingFrame({
   backdrop,
   children,
   center,
-}: StatusRingProps & { children: ReactNode; center?: ReactNode }) {
+}: StatusRingProps & { children: ReactNode }) {
   return (
     <View style={[styles.frame, getBackdropStyle(backdrop)]}>
       <View style={styles.track} />
